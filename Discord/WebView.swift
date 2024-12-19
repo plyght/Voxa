@@ -230,7 +230,7 @@ struct WebView: NSViewRepresentable {
         }
         
         // Fallback for older macOS versions
-        func webView(_ webView: WKWebView, 
+        func webView(_ webView: WKWebView,
                     runOpenPanelWith parameters: WKOpenPanelParameters,
                     initiatedByFrame frame: WKFrameInfo,
                     completionHandler: @escaping ([URL]?) -> Void) {
@@ -311,4 +311,4 @@ struct WebView: NSViewRepresentable {
             }
         }
     }
-} 
+}

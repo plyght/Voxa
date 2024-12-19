@@ -37,7 +37,7 @@ class DragView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         // Check if we're in the dragging gesture
         if let currentEvent = NSApplication.shared.currentEvent,
-           currentEvent.type == .leftMouseDown || 
+           currentEvent.type == .leftMouseDown ||
            (currentEvent.type == .leftMouseDragged && NSEvent.pressedMouseButtons == 1) {
             return self
         }

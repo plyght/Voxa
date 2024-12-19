@@ -160,7 +160,7 @@ struct SecondaryWindowView: View {
     let customCSS: String
     
     var body: some View {
-        DiscordWindowContent(channelClickWidth: channelClickWidth, 
+        DiscordWindowContent(channelClickWidth: channelClickWidth,
                            initialURL: url,
                            customCSS: customCSS)
             .frame(minWidth: 200, minHeight: 200)
@@ -180,4 +180,4 @@ struct SecondaryWindowScene: Scene {
         .defaultPosition(.center)
         .defaultSize(width: 800, height: 600)
     }
-} 
+}

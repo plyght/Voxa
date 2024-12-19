@@ -67,13 +67,18 @@ struct DiscordApp: App {
                         // Set initial window frame
                         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
                         let initialFrame = NSRect(
-                            x: screenFrame.minX, // Left edge of screen
+                            x: screenFrame.minX,
                             y: screenFrame.minY,
-                            width: 72,
+                            width: 72,  // Initial width for guild list
                             height: screenFrame.height
                         )
                         window.setFrame(initialFrame, display: true)
-                            
+                        
+                        // Configure window for resizing
+                        window.styleMask.insert(.resizable)
+                        window.minSize = NSSize(width: 72, height: 400)
+                        window.maxSize = NSSize(width: 1200, height: screenFrame.height)
+                        
                         // Disable window frame autosaving
                         window.setFrameAutosaveName("")
                         
