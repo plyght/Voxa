@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Add these keys -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Discord needs access to your microphone for voice chat and calls.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Discord needs access to your camera for video chat and calls.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Discord needs access to your location for certain features.</string>
+    <!-- Rest of your existing Info.plist entries -->
+</dict>
+</plist> 
