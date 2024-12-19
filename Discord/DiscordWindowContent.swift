@@ -8,22 +8,23 @@ struct DiscordWindowContent: View {
     @State var webViewReference: WKWebView?
     
     var body: some View {
-        ZStack(alignment: .top) {
+        ZStack(alignment: .topLeading) {
             // Main content spans full window
             ZStack {
                 VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                WebView(channelClickWidth: channelClickWidth, 
-                       initialURL: initialURL,
-                       customCSS: customCSS,
-                       webViewReference: $webViewReference)
+                WebView(channelClickWidth: channelClickWidth,
+                        initialURL: initialURL,
+                        customCSS: customCSS,
+                        webViewReference: $webViewReference)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
-            // Invisible draggable title bar overlaid on top
+            // Make the draggable area smaller so that it doesn't cover the entire top bar
+            // Only cover the area around the traffic lights, leaving the rest of the top bar clickable.
             DraggableView()
-                .frame(height: 48)
-                .frame(maxWidth: .infinity)
+                .frame(width: 70, height: 48)
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-} 
+}

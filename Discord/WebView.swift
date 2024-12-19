@@ -66,9 +66,15 @@ struct WebView: NSViewRepresentable {
         background: none !important;
     }
     
+    .container_eedf95  {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
+    
     .container_a6d69a {
         background: transparent !important;
         background-color: transparent !important;
+        backdrop-filter: blur(10px); !important;
     }
     
     .mainCard_a6d69a {
