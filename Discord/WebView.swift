@@ -1,5 +1,5 @@
 import SwiftUI
-import WebKit
+@preconcurrency import WebKit
 
 struct WebView: NSViewRepresentable {
     var channelClickWidth: CGFloat
@@ -66,9 +66,22 @@ struct WebView: NSViewRepresentable {
         background: none !important;
     }
     
-    .container_eedf95  {
-        background: transparent !important;
-        background-color: transparent !important;
+    .container_eedf95 {
+        position: relative;
+        background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent layer */
+    }
+
+    .container_eedf95::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        backdrop-filter: none; /* In case it gets applied */
+        filter: blur(10px); /* Blur effect */
+        background-color: inherit; /* Matches container's color */
+        z-index: -1; /* Sends the blur behind the content */
     }
     
     .container_a6d69a {
