@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DC9455282D28B7FC0023E2BB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DC9455272D28B7FC0023E2BB /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		D910A0852CF2B6F8005F6119 /* Discord.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Discord.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DC9455282D28B7FC0023E2BB /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = Discord;
 			packageProductDependencies = (
+				DC9455272D28B7FC0023E2BB /* Sparkle */,
 			);
 			productName = Discord;
 			productReference = D910A0852CF2B6F8005F6119 /* Discord.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = D910A07C2CF2B6F8005F6119;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D910A0862CF2B6F8005F6119 /* Products */;
 			projectDirPath = "";
@@ -343,6 +352,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DC9455272D28B7FC0023E2BB /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = D910A07D2CF2B6F8005F6119 /* Project object */;
 }

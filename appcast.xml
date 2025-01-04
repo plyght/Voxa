@@ -1,0 +1,19 @@
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+  <channel>
+    <title>Voxa Releases</title>
+    <link>https://github.com/plyght/voxa</link>
+    <item>
+      <title>Version 0.2</title>
+      <sparkle:releaseNotesLink>
+        https://github.com/plyght/voxa/releases/tag/v0.2
+      </sparkle:releaseNotesLink>
+      <enclosure
+         url="https://github.com/plyght/voxa/releases/download/v0.2/Voxa.dmg"
+         sparkle:version="100"
+         sparkle:shortVersionString="1.0"
+         length="12345678"
+         type="application/x-apple-diskimage"
+         sparkle:dsaSignature="...Signature Goes Here..." />
+    </item>
+  </channel>
+</rss>
