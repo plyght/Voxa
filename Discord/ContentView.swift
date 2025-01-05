@@ -9,8 +9,13 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
+    // *Analysis*: Add minimal logging or user guidance
     var body: some View {
+        // If you wanted a small text area or overlay, you could do it here
         DiscordWindowContent(channelClickWidth: 1000)
+            .onAppear {
+                print("ContentView has appeared.")
+            }
     }
 }
 
@@ -30,12 +35,12 @@ struct DraggableView: NSViewRepresentable {
 }
 
 class DragView: NSView {
+    // Allow dragging the window from this view
     override var mouseDownCanMoveWindow: Bool { true }
     
     override var allowsVibrancy: Bool { true }
     
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // Check if we're in the dragging gesture
         if let currentEvent = NSApplication.shared.currentEvent,
            currentEvent.type == .leftMouseDown ||
            (currentEvent.type == .leftMouseDragged && NSEvent.pressedMouseButtons == 1) {
@@ -70,4 +75,3 @@ struct VisualEffectView: NSViewRepresentable {
 #Preview {
     ContentView()
 }
-

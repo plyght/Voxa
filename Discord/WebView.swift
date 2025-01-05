@@ -7,7 +7,7 @@ struct WebView: NSViewRepresentable {
     var customCSS: String?
     @Binding var webViewReference: WKWebView?
     
-    // Add default CSS
+    // 1. Added default CSS
     private let defaultCSS = """
     :root {
         --background-accent: rgb(0, 0, 0, 0.5) !important;
@@ -68,7 +68,7 @@ struct WebView: NSViewRepresentable {
     
     .container_eedf95 {
         position: relative;
-        background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent layer */
+        background-color: rgba(0, 0, 0, 0.5);
     }
 
     .container_eedf95::before {
@@ -78,10 +78,10 @@ struct WebView: NSViewRepresentable {
         left: 0;
         right: 0;
         bottom: 0;
-        backdrop-filter: none; /* In case it gets applied */
-        filter: blur(10px); /* Blur effect */
-        background-color: inherit; /* Matches container's color */
-        z-index: -1; /* Sends the blur behind the content */
+        backdrop-filter: none;
+        filter: blur(10px);
+        background-color: inherit;
+        z-index: -1;
     }
     
     .container_a6d69a {
@@ -95,6 +95,7 @@ struct WebView: NSViewRepresentable {
     }
     """
     
+    // 2. Multiple initializers for convenience
     init(channelClickWidth: CGFloat, initialURL: String, customCSS: String? = nil) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
@@ -102,15 +103,21 @@ struct WebView: NSViewRepresentable {
         self._webViewReference = .constant(nil)
     }
     
-    init(channelClickWidth: CGFloat, initialURL: String, customCSS: String? = nil, webViewReference: Binding<WKWebView?>) {
+    init(channelClickWidth: CGFloat,
+         initialURL: String,
+         customCSS: String? = nil,
+         webViewReference: Binding<WKWebView?>) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
         self.customCSS = customCSS
         self._webViewReference = webViewReference
     }
     
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
     func makeNSView(context: Context) -> WKWebView {
-        // Create configuration with custom user agent and media permissions
         let config = WKWebViewConfiguration()
         config.applicationNameForUserAgent = "Version/17.2.1 Safari/605.1.15"
         
@@ -118,28 +125,33 @@ struct WebView: NSViewRepresentable {
         config.mediaTypesRequiringUserActionForPlayback = []
         config.allowsAirPlayForMediaPlayback = true
         
-        // Enable all required permissions
+        // If macOS 14 or higher, enable fullscreen
         if #available(macOS 14.0, *) {
             config.preferences.isElementFullscreenEnabled = true
         }
         
+        // Additional media constraints
         config.preferences.setValue(true, forKey: "mediaDevicesEnabled")
         config.preferences.setValue(true, forKey: "mediaStreamEnabled")
         config.preferences.setValue(true, forKey: "peerConnectionEnabled")
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
         
-        // Create webview with configuration
         let webView = WKWebView(frame: .zero, configuration: config)
         webViewReference = webView
+        
+        // Store a weak reference in Coordinator to break potential cycles
+        context.coordinator.webView = webView
+        
+        // Set UI delegate
         webView.uiDelegate = context.coordinator
         
-        // Make webview background transparent
+        // Make background transparent
         webView.setValue(false, forKey: "drawsBackground")
         
-        // Configure WKWebView to handle messages from JavaScript
+        // Add message handler
         webView.configuration.userContentController.add(context.coordinator, name: "channelClick")
         
-        // Permission script
+        // Add a debugging script for media permissions
         let permissionScript = WKUserScript(source: """
             const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
             navigator.mediaDevices.getUserMedia = async function(constraints) {
@@ -155,7 +167,7 @@ struct WebView: NSViewRepresentable {
         """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         webView.configuration.userContentController.addUserScript(permissionScript)
         
-        // Channel click monitoring script
+        // Monitor channel clicks, DMs, servers
         let channelClickScript = WKUserScript(source: """
             function attachClickListener() {
                 document.addEventListener('click', function(e) {
@@ -188,38 +200,54 @@ struct WebView: NSViewRepresentable {
             }
             attachClickListener();
         """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        
         webView.configuration.userContentController.addUserScript(channelClickScript)
         
-        // Use custom CSS if provided, otherwise use default CSS
+        // Use custom CSS if provided, else default
         let cssToUse = customCSS ?? defaultCSS
         let initialScript = WKUserScript(source: """
             const style = document.createElement('style');
             style.textContent = `\(cssToUse)`;
             document.head.appendChild(style);
         """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        
         webView.configuration.userContentController.addUserScript(initialScript)
         
-        // Load Discord
-        let url = URL(string: initialURL)!
-        let request = URLRequest(url: url)
-        webView.load(request)
+        // Safely load the provided URL, fallback if invalid
+        if let url = URL(string: initialURL) {
+            webView.load(URLRequest(url: url))
+        } else {
+            // Provide some fallback or show an error page if URL is invalid
+            let errorHTML = """
+            <html>
+              <body>
+                <h2>Invalid URL</h2>
+                <p>The provided URL could not be parsed.</p>
+              </body>
+            </html>
+            """
+            webView.loadHTMLString(errorHTML, baseURL: nil)
+        }
         
         return webView
     }
     
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        // *Analysis*: If you wish to update the webView here (e.g., reload or inject new CSS),
+        // you can do so. Currently, no updates are necessary.
     }
     
     class Coordinator: NSObject, WKScriptMessageHandler, WKUIDelegate {
+        // Weak reference to avoid strong reference cycles
+        weak var webView: WKWebView?
+        
         var parent: WebView
         
         init(_ parent: WebView) {
             self.parent = parent
+        }
+        
+        // Remove script message handler on deinit to avoid potential leaks
+        deinit {
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: "channelClick")
         }
         
         @available(macOS 12.0, *)
@@ -236,27 +264,28 @@ struct WebView: NSViewRepresentable {
                      runOpenPanelWith parameters: WKOpenPanelParameters,
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping ([URL]?) -> Void) {
+            // *Analysis*: A file picker could be displayed here if needed.
+            // For now, we return nil to cancel.
             completionHandler(nil)
         }
         
-        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
             guard let messageDict = message.body as? [String: Any],
                   let type = messageDict["type"] as? String else { return }
             
             switch type {
             case "server":
-                // No window resizing; just load in place if needed.
-                // The server panel is already part of the current UI, so do nothing.
+                // No special action required
                 break
                 
             case "channel":
-                // Load channel in the same window if needed.
-                // Channels are also already within the main UI context.
+                // Already in main UI
                 break
                 
             case "user":
-                if let urlString = messageDict["url"] as? String, let url = URL(string: urlString) {
-                    // Instead of opening a new window, just load the URL in the main webView
+                if let urlString = messageDict["url"] as? String,
+                   let url = URL(string: urlString) {
                     parent.webViewReference?.load(URLRequest(url: url))
                 }
                 

@@ -5,13 +5,18 @@ struct DiscordWindowContent: View {
     var channelClickWidth: CGFloat
     var initialURL: String = "https://discord.com/channels/@me"
     var customCSS: String?
+    
+    // Reference to the underlying WKWebView
     @State var webViewReference: WKWebView?
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Main content spans full window
+            // Main background & web content
             ZStack {
+                // Add a subtle system effect
                 VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+                
+                // Embed the Discord WebView
                 WebView(channelClickWidth: channelClickWidth,
                         initialURL: initialURL,
                         customCSS: customCSS,
@@ -19,12 +24,15 @@ struct DiscordWindowContent: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             
-            // Make the draggable area smaller so that it doesn't cover the entire top bar
-            // Only cover the area around the traffic lights, leaving the rest of the top bar clickable.
+            // Draggable area for traffic lights
             DraggableView()
                 .frame(width: 70, height: 48)
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDisappear {
+            // *Analysis*: If you wanted to do cleanup or set webViewReference = nil, you could do so here.
+            print("DiscordWindowContent disappeared.")
+        }
     }
 }

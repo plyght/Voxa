@@ -32,9 +32,7 @@ class WindowDelegate: NSObject, NSWindowDelegate {
     private func repositionTrafficLights(for notification: Notification) {
         guard let window = notification.object as? NSWindow else { return }
         
-        // Ensure traffic lights are repositioned both immediately and after layout
         let repositionBlock = {
-            // Make sure buttons are not hidden
             window.standardWindowButton(.closeButton)?.isHidden = false
             window.standardWindowButton(.miniaturizeButton)?.isHidden = false
             window.standardWindowButton(.zoomButton)?.isHidden = false
@@ -48,7 +46,7 @@ class WindowDelegate: NSObject, NSWindowDelegate {
         // Execute immediately
         repositionBlock()
         
-        // And after a slight delay to catch any animation completions
+        // And after a slight delay (0.1 s) to catch any animation completions
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             repositionBlock()
         }
@@ -63,9 +61,15 @@ struct DiscordApp: App {
         WindowGroup {
             ContentView()
                 .onAppear {
+                    // Use a guard to ensure there's a main screen
+                    guard let mainScreen = NSScreen.main else {
+                        print("No available main screen to set initial window frame.")
+                        return
+                    }
+                    
+                    // If there's a main application window, configure it
                     if let window = NSApplication.shared.windows.first {
-                        // Set a more standard initial window size
-                        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+                        let screenFrame = mainScreen.visibleFrame
                         let newWidth: CGFloat = 1000
                         let newHeight: CGFloat = 600
                         
@@ -73,26 +77,24 @@ struct DiscordApp: App {
                         let centeredX = screenFrame.midX - (newWidth / 2)
                         let centeredY = screenFrame.midY - (newHeight / 2)
                         
-                        let initialFrame = NSRect(
-                            x: centeredX,
-                            y: centeredY,
-                            width: newWidth,
-                            height: newHeight
-                        )
+                        let initialFrame = NSRect(x: centeredX,
+                                                  y: centeredY,
+                                                  width: newWidth,
+                                                  height: newHeight)
                         
                         window.setFrame(initialFrame, display: true)
                         
                         // Configure window for resizing
                         window.styleMask.insert(.resizable)
                         
-                        // Set reasonable min and max sizes
+                        // Set min/max sizes
                         window.minSize = NSSize(width: 600, height: 400)
                         window.maxSize = NSSize(width: 2000, height: screenFrame.height)
                         
-                        // Disable window frame autosaving
+                        // Disable frame autosaving
                         window.setFrameAutosaveName("")
                         
-                        // Set window delegate for traffic light positioning
+                        // Assign delegate for traffic light positioning
                         window.delegate = appDelegate.windowDelegate
                     }
                 }
