@@ -1,0 +1,75 @@
+{
+  "host": "https://www.peril.lol/voxa",
+  "title": "Voxa",
+  "description": "Voxa, A modern Discord client for macOS, built with SwiftUI. Fully Open Source.",
+  "repositoryUrl": "https://github.com/plyght/voxa",
+  "twitter": "@CodeEditApp",
+  "pages": {
+    "/": {
+      "title": "Overview",
+      "description": "A modern Discord client for macOS, built with SwiftUI. Fully Open Source."
+    },
+    "/whats-new": {
+      "title": "What's New",
+      "description": "Discover the newest updates, features, and bug fixes in Voxa's latest releases. Explore what's new and download builds for any version."
+    },
+    "/blog": {
+      "title": "Blog",
+      "description": "The Voxa blog is the source for news about Voxa. Read project news, get updates, and read about community progress."
+    },
+    "/download": {
+      "title": "Download",
+      "description": "Download Voxa. A modern Discord client for macOS, built with SwiftUI. Fully Open Source."
+    },
+    "https://github.com/plyght/Voxa": {
+      "title": "GitHub",
+      "description": "Voxa GitHub repository"
+    }
+  },
+  "links": {
+    "githubOrg": "https://github.com/plyght",
+    "githubRepo": "https://github.com/plyght/voxa",
+    "githubSponsor": "https://github.com/sponsors/plyght",
+    "twitter": "https://twitter.com/plyght__",
+    "discord": "https://discord.gg/WPwx2xvb",
+    "license": "https://github.com/CodeEditApp/CodeEdit/blob/main/LICENSE.md"
+  },
+  "navigation": [
+    "/",
+    "/whats-new",
+    "/blog",
+    "https://github.com/plyght/Voxa"
+  ],
+  "categories": {
+    "updates": {
+      "title": "Updates",
+      "longTitle": "Project Updates",
+      "description": "Get the latest news on our Discord client, including new releases and upcoming features, keeping you in the loop with our project's progress."
+    },
+    "insights": {
+      "title": "Insights",
+      "longTitle": "Development Insights",
+      "description": "Explore the nuts and bolts of our development process, offering a behind-the-scenes look at the challenges and solutions that power our project."
+    },
+    "spotlights": {
+      "title": "Contributor Spotlights",
+      "longTitle": "Contributor Spotlights",
+      "description": "Celebrate the individuals who make our project possible, highlighting their contributions, stories, and the impact they have on our community."
+    },
+    "tutorials": {
+      "title": "Tutorials",
+      "longTitle": "Guides and Tutorials",
+      "description": "Explore a wide range of tutorials that not only guide you through mastering our Discord client but also delve into general coding tutorials to elevate your development skills."
+    },
+    "user-voices": {
+      "title": "User Voices",
+      "longTitle": "User Voices and Stories",
+      "description": "Hear firsthand from our users about how our Discord client enhances their fun(ctionality), with personal anecdotes, innovative usage tips, and custom setup guides."
+    },
+    "news": {
+      "title": "News",
+      "longTitle": "Industry News and Trends",
+      "description": "Stay informed with updates and insights on the latest in tech, software development, and how these trends impact our project and community."
+    }
+  }
+}

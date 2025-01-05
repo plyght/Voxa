@@ -1,0 +1,25 @@
+{
+    "name": "@types/stylis",
+    "version": "4.2.4",
+    "description": "TypeScript definitions for stylis",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/stylis",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Gen Hames",
+            "githubUsername": "heyheyhello",
+            "url": "https://github.com/heyheyhello"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/stylis"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "typesPublisherContentHash": "7c1adf1a665a3b7d8ddacf2199476112ebb2eff3681425208bb0dd83d3a65204",
+    "typeScriptVersion": "4.5"
+}

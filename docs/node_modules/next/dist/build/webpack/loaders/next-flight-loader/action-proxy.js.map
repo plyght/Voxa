@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../../../src/build/webpack/loaders/next-flight-loader/action-proxy.ts"],"names":["createActionProxy","id","action","registerServerReference"],"mappings":"AAAA,oDAAoD;;;;+BAGpCA;;;eAAAA;;;4BAFwB;AAEjC,SAASA,kBAAkBC,EAAU,EAAEC,MAAW;IACvD,OAAOC,IAAAA,mCAAuB,EAACD,QAAQD,IAAI;AAC7C"}

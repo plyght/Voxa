@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../src/server/lib/revalidate.ts"],"names":["formatRevalidate","revalidate","CACHE_ONE_YEAR"],"mappings":";;;;+BAWgBA;;;eAAAA;;;2BAXe;AAWxB,SAASA,iBAAiBC,UAAsB;IACrD,IAAIA,eAAe,GAAG;QACpB,OAAO;IACT,OAAO,IAAI,OAAOA,eAAe,UAAU;QACzC,OAAO,CAAC,SAAS,EAAEA,WAAW,wBAAwB,CAAC;IACzD;IAEA,OAAO,CAAC,SAAS,EAAEC,yBAAc,CAAC,wBAAwB,CAAC;AAC7D"}

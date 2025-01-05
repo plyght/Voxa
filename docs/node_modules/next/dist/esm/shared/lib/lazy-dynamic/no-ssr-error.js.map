@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../../src/shared/lib/lazy-dynamic/no-ssr-error.ts"],"names":["NEXT_DYNAMIC_NO_SSR_CODE","throwWithNoSSR","error","Error","digest"],"mappings":"AAAA,+GAA+G;AAE/G,OAAO,MAAMA,2BAA2B,2BAA0B;AAElE,OAAO,SAASC;IACd,MAAMC,QAAQ,IAAIC,MAAMH;IACtBE,MAAcE,MAAM,GAAGJ;IACzB,MAAME;AACR"}
