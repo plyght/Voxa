@@ -1,1 +1,0 @@
-{"version":3,"sources":["../../src/build/noop-react-dom-server-legacy.ts"],"names":["renderToString","renderToStaticMarkup","ERROR_MESSAGE","Error"],"mappings":";;;;;;;;;;;;;;;IAGgBA,cAAc;eAAdA;;IAIAC,oBAAoB;eAApBA;;;AAPhB,MAAMC,gBACJ;AAEK,SAASF;IACd,MAAM,IAAIG,MAAMD;AAClB;AAEO,SAASD;IACd,MAAM,IAAIE,MAAMD;AAClB"}
