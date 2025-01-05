@@ -1,1 +1,0 @@
-"use strict";exports.id=2221,exports.ids=[2221],exports.modules={92221:(e,t,r)=>{r.r(t),r.d(t,{default:()=>d});var s=r(16689);let d=e=>{let t=window.matchMedia(e),[r,d]=(0,s.useState)(t.matches);return(0,s.useEffect)(()=>{let e=e=>d(e.matches);return t.addListener(e),()=>t.removeListener(e)}),r}}};

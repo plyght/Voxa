@@ -1,1 +1,0 @@
-"use strict";exports.id=5235,exports.ids=[5235],exports.modules={55235:(t,e,i)=>{i.r(e),i.d(e,{default:()=>d});let d={src:"/_next/static/media/favicon.4b81d994.ico",height:256,width:256,blurWidth:0,blurHeight:0}}};

@@ -1,1 +1,0 @@
-"use strict";exports.id=8139,exports.ids=[8139],exports.modules={38139:(t,e,r)=>{r.a(t,async(t,a)=>{try{r.r(e),r.d(e,{default:()=>s});var n=r(20997),d=r(28706),i=r(94307),o=t([d]);function s(){return n.jsx(d.Section,{contained:!0,gutterY:!0,children:n.jsx(i.default,{variant:"headline",children:"Make CodeEdit your own"})})}d=(o.then?(await o)():o)[0],a()}catch(t){a(t)}})}};

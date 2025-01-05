@@ -1,1 +1,0 @@
-"use strict";exports.id=9248,exports.ids=[9248],exports.modules={29248:(t,e,r)=>{r.a(t,async(t,a)=>{try{r.r(e),r.d(e,{default:()=>s});var n=r(20997),c=r(28706),i=t([c]);function s(){return n.jsx(n.Fragment,{children:n.jsx(c.Section,{contained:!0,gutterY:!0,children:"Privacy page"})})}c=(i.then?(await i)():i)[0],a()}catch(t){a(t)}})}};
