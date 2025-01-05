@@ -1,0 +1,1 @@
+"use strict";exports.id=9947,exports.ids=[9947],exports.modules={29947:(e,t,r)=>{r.a(e,async(e,n)=>{try{r.r(t),r.d(t,{default:()=>i});var s=r(20997),a=r(28706),c=e([a]);function i(){return s.jsx(s.Fragment,{children:s.jsx(a.Section,{contained:!0,gutterY:!0,children:"License page"})})}a=(c.then?(await c)():c)[0],n()}catch(e){n(e)}})}};

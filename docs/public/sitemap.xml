@@ -1,0 +1,46 @@
+
+    <?xml version="1.0" encoding="UTF-8"?>
+    <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        
+              <url>
+                  <loc>https://codeedit.app/developer</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/download</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/extensions</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/resources</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/blog/demo</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/blog/starter-post</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/blog/2024/01/why-were-building-codeedit</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/blog/2024/02/generic-fuzzy-search-algorithm</loc>
+              </url>
+            
+              <url>
+                  <loc>https://codeedit.app/blog/2025/01/2024-year-in-review</loc>
+              </url>
+            
+    </urlset>
+    

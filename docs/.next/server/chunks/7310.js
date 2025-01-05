@@ -1,0 +1,1 @@
+"use strict";exports.id=7310,exports.ids=[7310],exports.modules={47310:(t,e,r)=>{r.a(t,async(t,n)=>{try{r.r(e),r.d(e,{default:()=>i});var a=r(20997),s=r(28706),c=t([s]);function i(){return a.jsx(a.Fragment,{children:a.jsx(s.Section,{contained:!0,gutterY:!0,children:"TOS Page"})})}s=(c.then?(await c)():c)[0],n()}catch(t){n(t)}})}};
