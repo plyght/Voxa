@@ -1,6 +1,1 @@
-{
-  "/_app": "pages/_app.js",
-  "/_error": "pages/_error.js",
-  "/_document": "pages/_document.js",
-  "/": "pages/index.js"
-}
+{"/_app":"pages/_app.js","/_error":"pages/_error.js","/_document":"pages/_document.js","/api/hello":"pages/api/hello.js","/dev/grid":"pages/dev/grid.html","/dev/layout":"pages/dev/layout.html","/dev/typography":"pages/dev/typography.html","/developer":"pages/developer.html","/extensions":"pages/extensions.html","/legal/license":"pages/legal/license.html","/legal/privacy":"pages/legal/privacy.html","/legal/tos":"pages/legal/tos.html","/resources":"pages/resources.html","/blog":"pages/blog.js","/blog/[...slug]":"pages/blog/[...slug].js","/download":"pages/download.js","/":"pages/index.js","/whats-new":"pages/whats-new.js","/sparkle/[tag]":"pages/sparkle/[tag].js","/whats-new/raw/[tag]":"pages/whats-new/raw/[tag].js","/404":"pages/404.html"}

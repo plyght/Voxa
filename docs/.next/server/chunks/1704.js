@@ -1,0 +1,1 @@
+"use strict";exports.id=1704,exports.ids=[1704],exports.modules={61704:(s,t,e)=>{function o(s,t){t.status(200).json({name:"John Doe"})}e.r(t),e.d(t,{default:()=>o})}};

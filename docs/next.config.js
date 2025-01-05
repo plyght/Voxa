@@ -27,10 +27,18 @@ const nextConfig = {
     ],
   },
 webpack: (config, options) => {
-// Make sure bun.lockb is handled by null-loader
+// Add null-loader for binary and xml files
 config.module.rules.push({
-    test: /\.lockb$/,
-    use: 'null-loader'
+    oneOf: [
+    {
+        test: /\.lockb$/,
+        use: 'null-loader'
+    },
+    {
+        test: /\.xml$/,
+        use: 'null-loader'
+    }
+    ]
 });
 
 // Handle SVG files
@@ -55,6 +63,12 @@ config.plugins.push(
     /\.md$/
     )
 );
+
+// Add rule for public directory files
+config.module.rules.push({
+    resourceQuery: /public\/.+$/,
+    use: 'null-loader'
+});
 
 return config;
 },
