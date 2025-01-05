@@ -22,19 +22,19 @@ jobs:
 
       # Step 3: Install dependencies
       - name: Install dependencies
-        working-directory: ./ # Adjust if dependencies are elsewhere
+        working-directory: ./docs # Adjust if your package.json is elsewhere
         run: bun install
 
       # Step 4: Build the site
       - name: Build the site
-        working-directory: ./ # Adjust if source files are elsewhere
+        working-directory: ./docs # Adjust if your build script is elsewhere
         run: bun run build
 
       # Step 5: Copy build output to docs folder
       - name: Copy build output to docs
         run: |
           mkdir -p docs # Ensure the docs folder exists
-          cp -r ./dist/* ./docs/ # Adjust 'dist' if your build output folder is different
+          cp -r ./docs/dist/* ./docs/ # Adjust 'dist' if your build output folder is different
 
       # Step 6: Commit changes to docs folder
       - name: Commit changes
