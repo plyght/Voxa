@@ -14,28 +14,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Bun
+      # Step 2: Set up Node.js (to match your local Node.js version)
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22.12.0' # Ensure this matches your local Node.js version
+
+      # Step 3: Verify Node.js Version
+      - name: Verify Node.js Version
+        run: node --version
+
+      # Step 4: Set up Bun
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      # Step 3: Install dependencies
+      # Step 5: Install dependencies
       - name: Install dependencies
         working-directory: ./docs # Adjust if your package.json is elsewhere
-        run: bun install
+        run: |
+          rm -rf node_modules # Clear old dependencies
+          bun install
 
-      # Step 4: Build the site
+      # Step 6: Build the site
       - name: Build the site
         working-directory: ./docs # Adjust if your build script is elsewhere
         run: bun run build
 
-      # Step 5: Copy build output to docs folder
+      # Step 7: Copy build output to docs folder
       - name: Copy build output to docs
         run: |
           mkdir -p docs # Ensure the docs folder exists
           cp -r ./docs/dist/* ./docs/ # Adjust 'dist' if your build output folder is different
-      # Step 6: Commit changes to docs folder
+
+      # Step 8: Commit changes to docs folder
       - name: Commit changes
         run: |
           git config --global user.name "GitHub Actions"
@@ -43,3 +56,8 @@ jobs:
           git add docs
           git commit -m "Update docs with new build output" || echo "No changes to commit"
           git push
+
+      # Step 9: Generate Sitemap
+      - name: Generate Sitemap
+        working-directory: ./docs
+        run: NODE_OPTIONS='--experimental-json-modules' node ./scripts/generate-sitemap.mjs
