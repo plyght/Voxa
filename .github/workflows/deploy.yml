@@ -10,37 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Check out the repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Set up Bun
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16' # Match your local Node.js version
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      # Step 3: Install dependencies
+      - name: Clear cache
+        run: |
+          rm -rf node_modules
+          rm -f bun.lockb
+
       - name: Install dependencies
-        working-directory: ./docs # Adjust if your package.json is elsewhere
         run: bun install
 
-      # Step 4: Build the site
+      - name: Debug environment
+        run: |
+          node -v
+          npm -v
+          bun -v
+          bun list
+
+      - name: List react-feather files
+        run: ls -R node_modules/react-feather/dist/icons
+
       - name: Build the site
-        working-directory: ./docs # Adjust if your build script is elsewhere
         run: bun run build
 
-      # Step 5: Copy build output to docs folder
-      - name: Copy build output to docs
-        run: |
-          mkdir -p docs # Ensure the docs folder exists
-          cp -r ./docs/dist/* ./docs/ # Adjust 'dist' if your build output folder is different
-
-      # Step 6: Commit changes to docs folder
-      - name: Commit changes
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add docs
-          git commit -m "Update docs with new build output" || echo "No changes to commit"
-          git push
+      - name: Generate Sitemap
+        run: NODE_OPTIONS='--experimental-json-modules' node ./scripts/generate-sitemap.mjs

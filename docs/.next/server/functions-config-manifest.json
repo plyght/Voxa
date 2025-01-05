@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/blog/[...slug]":{},"/blog":{},"/download":{},"/":{},"/sparkle/[tag]":{},"/whats-new":{},"/whats-new/raw/[tag]":{}}}
+{"version":1,"functions":{"/blog/[...slug]":{},"/blog":{},"/download":{},"/":{},"/sparkle/[tag]":{},"/whats-new/raw/[tag]":{},"/whats-new":{}}}
