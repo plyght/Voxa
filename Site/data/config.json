@@ -1,34 +1,34 @@
 {
-  "host": "https://www.codeedit.app",
-  "title": "CodeEdit",
-  "description": "CodeEdit, a lightweight, natively built editor for macOS. Open source. Free forever.",
-  "repositoryUrl": "https://github.com/CodeEditApp/codeedit-app",
+  "host": "https://www.peril.lol/voxa",
+  "title": "Voxa",
+  "description": "Voxa, A modern Discord client for macOS, built with SwiftUI. Fully Open Source.",
+  "repositoryUrl": "https://github.com/plyght/voxa",
   "twitter": "@CodeEditApp",
   "pages": {
     "/": {
       "title": "Overview",
-      "description": "A lightweight, natively built editor. Open source. Free forever."
+      "description": "A modern Discord client for macOS, built with SwiftUI. Fully Open Source."
     },
     "/whats-new": {
       "title": "What's New",
-      "description": "Discover the newest updates, features, and bug fixes in CodeEdit's latest releases. Explore what's new and download builds for any version."
+      "description": "Discover the newest updates, features, and bug fixes in Voxa's latest releases. Explore what's new and download builds for any version."
     },
     "/blog": {
       "title": "Blog",
-      "description": "The CodeEdit blog is the source for news about CodeEdit. Read project news, get updates, and read about community progress."
+      "description": "The Voxa blog is the source for news about Voxa. Read project news, get updates, and read about community progress."
     },
     "/download": {
       "title": "Download",
-      "description": "Download CodeEdit. A lightweight, natively built editor. Open source. Free forever."
+      "description": "Download Voxa. A lightweight, natively built editor. Open source. Free forever."
     },
-    "https://github.com/CodeEditApp/CodeEdit": {
+    "https://github.com/plyght/Voxa": {
       "title": "GitHub",
       "description": "CodeEdit GitHub repository"
     }
   },
   "links": {
-    "githubOrg": "https://github.com/CodeEditApp",
-    "githubRepo": "https://github.com/CodeEditApp/CodeEdit",
+    "githubOrg": "https://github.com/plyght",
+    "githubRepo": "https://github.com/plyght/voxa",
     "githubProject": "https://github.com/orgs/CodeEditApp/projects/3/views/1",
     "githubSponsor": "https://github.com/sponsors/CodeEditApp",
     "twitter": "https://twitter.com/CodeEditApp",
@@ -39,7 +39,7 @@
     "/",
     "/whats-new",
     "/blog",
-    "https://github.com/CodeEditApp/CodeEdit"
+    "https://github.com/plyght/Voxa"
   ],
   "categories": {
     "updates": {

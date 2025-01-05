@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../../src/shared/lib/lazy-dynamic/dynamic-no-ssr.tsx"],"names":["NoSSR","children","window","throwWithNoSSR"],"mappings":"AAAA;;;;;+BAOgBA;;;eAAAA;;;4BAJe;AAIxB,SAASA,MAAM,KAAiC;IAAjC,IAAA,EAAEC,QAAQ,EAAuB,GAAjC;IACpB,IAAI,OAAOC,WAAW,aAAa;QACjCC,IAAAA,0BAAc;IAChB;IAEA,OAAOF;AACT"}
