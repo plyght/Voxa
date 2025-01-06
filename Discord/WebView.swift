@@ -6,6 +6,7 @@ struct WebView: NSViewRepresentable {
     var initialURL: String
     var customCSS: String?
     @Binding var webViewReference: WKWebView?
+    @AppStorage("FakeNitro") var fakeNitro: Bool = false
     
     // 1. Added default CSS
     private let defaultCSS = """
@@ -137,7 +138,9 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
         
         let webView = WKWebView(frame: .zero, configuration: config)
-        webViewReference = webView
+        DispatchQueue.main.async {
+            webViewReference = webView
+        }
         
         // Store a weak reference in Coordinator to break potential cycles
         context.coordinator.webView = webView
@@ -166,6 +169,15 @@ struct WebView: NSViewRepresentable {
             };
         """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         webView.configuration.userContentController.addUserScript(permissionScript)
+        
+        if let fakeNitroScript = loadPlugin(name: "FakeNitro") {
+            webView.configuration.userContentController.addUserScript(fakeNitroScript)
+            
+            print(fakeNitro)
+            if fakeNitro {
+                webView.configuration.userContentController.addUserScript(WKUserScript(source: "enableFNitro();", injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+            }
+        }
         
         // Monitor channel clicks, DMs, servers
         let channelClickScript = WKUserScript(source: """
@@ -270,28 +282,22 @@ struct WebView: NSViewRepresentable {
         }
         
         func userContentController(_ userContentController: WKUserContentController,
-                                   didReceive message: WKScriptMessage) {
-            guard let messageDict = message.body as? [String: Any],
-                  let type = messageDict["type"] as? String else { return }
+                                   didReceive message: WKScriptMessage) {}
+    }
+}
+
+
+func loadPlugin(name filename: String) -> WKUserScript? {
+    if let filePath = Bundle.main.path(forResource: filename, ofType: "js") {
+        do {
+            let fileContent = try String(contentsOfFile: filePath, encoding: .utf8)
             
-            switch type {
-            case "server":
-                // No special action required
-                break
-                
-            case "channel":
-                // Already in main UI
-                break
-                
-            case "user":
-                if let urlString = messageDict["url"] as? String,
-                   let url = URL(string: urlString) {
-                    parent.webViewReference?.load(URLRequest(url: url))
-                }
-                
-            default:
-                break
-            }
+            let wKUserScript = WKUserScript(source: fileContent, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            
+            return wKUserScript
+        } catch {
+            print("Error reading file: \(error.localizedDescription)")
         }
     }
+    return nil
 }
