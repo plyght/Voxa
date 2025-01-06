@@ -56,6 +56,7 @@ class WindowDelegate: NSObject, NSWindowDelegate {
 @main
 struct DiscordApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @AppStorage("FakeNitro") var fakeNitro: Bool = false
     
     var body: some Scene {
         WindowGroup {
@@ -102,6 +103,15 @@ struct DiscordApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .windowArrangement) { }
+            
+            CommandMenu("Plugins") {
+                Button {
+                    fakeNitro.toggle()
+                } label: {
+                    Text("\(fakeNitro ? "Disable" : "Enable") Fake Nitro")
+                }
+                
+            }
         }
     }
 }
