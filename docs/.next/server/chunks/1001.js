@@ -1,1 +1,0 @@
-"use strict";exports.id=1001,exports.ids=[1001],exports.modules={1001:s=>{s.exports=JSON.parse('{"compilerOptions":{"baseUrl":".","paths":{"@/components/*":["./components/*"],"@/data/*":["./data/*"],"@/hooks/*":["./hooks/*"],"@/styles/*":["./styles/*"],"@/utils/*":["./utils/*"],"@/assets/*":["./assets/*"]}}}')}};

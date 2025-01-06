@@ -1,1 +1,0 @@
-{"version":3,"sources":["../../src/client/app-next-dev-turbopack.ts"],"names":["appBootstrap","window","next","version","self","__webpack_hash__","require","hydrate"],"mappings":"AAAA,8BAA8B;AAE9B,SAASA,YAAY,QAAQ,kBAAiB;AAE9CC,OAAOC,IAAI,CAACC,OAAO,IAAI;AACrBC,KAAaC,gBAAgB,GAAG;AAElCL,aAAa;IACXM,QAAQ;IACR,MAAM,EAAEC,OAAO,EAAE,GAAGD,QAAQ;IAC5BC;AACF,GAEA,4BAA4B"}
