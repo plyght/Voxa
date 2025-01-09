@@ -46,6 +46,9 @@ https://discord.gg/WPwx2xvb
    cd Voxa
 
 ## Upcoming Features
+### most of these will be fixing [Known Issues](Known-Issues)
+
+- Proper file support
 
 
  ## Star History
