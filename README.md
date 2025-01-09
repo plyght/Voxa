@@ -15,6 +15,13 @@ https://discord.gg/WPwx2xvb
 - **Advanced Window Management:** Resizable and draggable windows with transparency and aesthetic layouts.
 - **Privacy-First Permissions:** Fine-grained access to microphone, camera, and location only when needed.
 
+## Known Issues
+- Some items are fully transparent, lacking any translucency or blur effects.
+- Certain items have not been fully integrated with transparent/translucent features.
+- Current link handling is suboptimal, preventing links from being opened directly from Voxa in your default browser (although they can be copied and pasted.
+- Light mode has a few minor, easily resolvable issues.
+- The "Upload File" button is non-functional, requiring users to drag and drop files above the window for uploading.
+
 ---
 
 ## Table of Contents
