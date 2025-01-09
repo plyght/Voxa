@@ -14,6 +14,7 @@ https://discord.gg/WPwx2xvb
 - **Customizable Interface:** Modify appearance with custom CSS and theming.
 - **Advanced Window Management:** Resizable and draggable windows with transparency and aesthetic layouts.
 - **Privacy-First Permissions:** Fine-grained microphone, camera, and location access are available only when needed.
+- **FakeNitro and other Vencord plugins:** FakeNitro has recently been implemented into Voxa, and other Vencord plugins are expected soon! See [Upcoming Features](#upcoming-features).
 
 ## Known Issues
 - Some items are fully transparent, lacking any translucency or blur effects.
