@@ -1,6 +1,6 @@
 # Voxa
 
-Voxa is a sleek, lightweight, and native macOS Discord client built using SwiftUI. Designed for speed, efficiency, and a modern user experience, it brings the best of Discord to your Mac in a fully optimized package.
+Voxa is a sleek, lightweight, native macOS Discord client built using SwiftUI. Designed for speed, efficiency, and a modern user experience, it brings the best of Discord to your Mac in a fully optimized package.
 
 ## This project wouldn't have started without [@AustinGraphics](https://github.com/AustinGraphics), go support him!
 
@@ -13,12 +13,12 @@ https://discord.gg/WPwx2xvb
 - **Performance-Focused:** Lightweight design ensures low resource usage and high responsiveness.
 - **Customizable Interface:** Modify appearance with custom CSS and theming.
 - **Advanced Window Management:** Resizable and draggable windows with transparency and aesthetic layouts.
-- **Privacy-First Permissions:** Fine-grained access to microphone, camera, and location only when needed.
+- **Privacy-First Permissions:** Fine-grained microphone, camera, and location access are available only when needed.
 
 ## Known Issues
 - Some items are fully transparent, lacking any translucency or blur effects.
 - Certain items have not been fully integrated with transparent/translucent features.
-- Current link handling is suboptimal, preventing links from being opened directly from Voxa in your default browser (although they can be copied and pasted.
+- Current link handling is suboptimal, preventing links from being opened directly from Voxa in your default browser (although they can be copied and pasted)
 - Light mode has a few minor, easily resolvable issues.
 - The "Upload File" button is non-functional, requiring users to drag and drop files above the window for uploading.
 
