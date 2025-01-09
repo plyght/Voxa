@@ -28,6 +28,7 @@ https://discord.gg/WPwx2xvb
 ## Table of Contents
 
 - [Installation](#installation)
+- [Upcoming Featueres](#upcoming-features)
 
 ---
 
@@ -43,6 +44,8 @@ https://discord.gg/WPwx2xvb
    ```bash
    git clone https://github.com/plyght/Voxa.git
    cd Voxa
+
+## Upcoming Features
 
 
  ## Star History
