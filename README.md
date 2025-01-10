@@ -7,7 +7,7 @@ Voxa is a sleek, lightweight, native macOS Discord client built using SwiftUI. D
 ### Discord Server
 https://discord.gg/Dps8HnDBpw
 
-### Website (in development)<sup><a href="#<sup>1</sup>">1</a></sup>.
+### Website (in development)<sup><a href="#1source-code-repository---this-contains-the-source-code-and-related-documentation-for-the-project">1</a></sup>.
 https://voxa.peril.lol
 
 ## Key Features
