@@ -65,4 +65,4 @@ https://voxa.peril.lol
  </picture>
 </a>
 
-##### <sup>1</sup>[Source Code Repository](https://github.com/plyght/voxa.peril.lol) - This contains the source code and related documentation for the project.
+##### <sup>1</sup>[voxa.peril.lol Source Code](https://github.com/plyght/voxa.peril.lol) - This contains the source code of the Voxa website.
