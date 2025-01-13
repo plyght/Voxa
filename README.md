@@ -31,7 +31,7 @@ https://voxa.peril.lol
 ## Table of Contents
 
 - [Installation](#installation)
-- [Upcoming Featueres](#upcoming-features)
+- [Upcoming Features](#upcoming-features)
 
 ---
 
