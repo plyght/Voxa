@@ -23,7 +23,7 @@ struct DraggableView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = DragView()
         view.wantsLayer = true
-        view.layer?.backgroundColor = .clear
+        view.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.5).cgColor // Semi-transparent for visibility
 
         // Ensure the view is above others and can receive mouse events
         view.translatesAutoresizingMaskIntoConstraints = false
@@ -43,13 +43,18 @@ class DragView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         if let currentEvent = NSApplication.shared.currentEvent {
             switch currentEvent.type {
-            case .leftMouseDragged:
+            case .leftMouseDown, .leftMouseDragged:
                 return self
             default:
                 return nil
             }
         }
         return nil
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        // Initiate window dragging
+        window?.performDrag(with: event)
     }
 }
 
