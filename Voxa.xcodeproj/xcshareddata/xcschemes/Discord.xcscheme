@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "1600"
+   LastUpgradeVersion = "1620"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -47,9 +47,18 @@
             BlueprintIdentifier = "D910A0842CF2B6F8005F6119"
             BuildableName = "Discord.app"
             BlueprintName = "Discord"
-            ReferencedContainer = "container:Discord.xcodeproj">
+            ReferencedContainer = "container:Voxa.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "D910A0842CF2B6F8005F6119"
+            BuildableName = "Discord.app"
+            BlueprintName = "Discord"
+            ReferencedContainer = "container:Discord.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
       <AdditionalOptions>
          <AdditionalOption
             key = "APP_DISTRIBUTOR_ID_OVERRIDE"

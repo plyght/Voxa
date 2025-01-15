@@ -11,12 +11,25 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		D910A0852CF2B6F8005F6119 /* Discord.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Discord.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D910A0852CF2B6F8005F6119 /* Voxa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Voxa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DCE2C6F82D37F3C300CFF277 /* Exceptions for "Discord" folder in "Discord" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D910A0842CF2B6F8005F6119 /* Discord */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D910A0872CF2B6F8005F6119 /* Discord */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DCE2C6F82D37F3C300CFF277 /* Exceptions for "Discord" folder in "Discord" target */,
+			);
 			path = Discord;
 			sourceTree = "<group>";
 		};
@@ -45,7 +58,7 @@
 		D910A0862CF2B6F8005F6119 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				D910A0852CF2B6F8005F6119 /* Discord.app */,
+				D910A0852CF2B6F8005F6119 /* Voxa.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -73,7 +86,7 @@
 				DC9455272D28B7FC0023E2BB /* Sparkle */,
 			);
 			productName = Discord;
-			productReference = D910A0852CF2B6F8005F6119 /* Discord.app */;
+			productReference = D910A0852CF2B6F8005F6119 /* Voxa.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -84,14 +97,14 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1610;
-				LastUpgradeCheck = 1610;
+				LastUpgradeCheck = 1620;
 				TargetAttributes = {
 					D910A0842CF2B6F8005F6119 = {
 						CreatedOnToolsVersion = 16.1;
 					};
 				};
 			};
-			buildConfigurationList = D910A0802CF2B6F8005F6119 /* Build configuration list for PBXProject "Discord" */;
+			buildConfigurationList = D910A0802CF2B6F8005F6119 /* Build configuration list for PBXProject "Voxa" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -168,6 +181,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -193,6 +207,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = Voxa;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -233,6 +248,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -251,6 +267,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = Voxa;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
@@ -263,10 +280,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Discord/Discord.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Discord/Preview Content\"";
 				DEVELOPMENT_TEAM = 7BRPLLH5D4;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -287,7 +305,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = lol.peril.voxa;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Voxa;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -300,10 +318,11 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Discord/Discord.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Discord/Preview Content\"";
 				DEVELOPMENT_TEAM = 7BRPLLH5D4;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -324,7 +343,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.1;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = lol.peril.voxa;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Voxa;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -333,7 +352,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		D910A0802CF2B6F8005F6119 /* Build configuration list for PBXProject "Discord" */ = {
+		D910A0802CF2B6F8005F6119 /* Build configuration list for PBXProject "Voxa" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				D910A0922CF2B6FA005F6119 /* Debug */,
