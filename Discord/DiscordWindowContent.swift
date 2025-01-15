@@ -23,7 +23,7 @@ struct DiscordWindowContent: View {
                         customCSS: customCSS,
                         webViewReference: $webViewReference)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onChange(of: fakeNitro) { fakeNitro in
+                    .onChange(of: fakeNitro) {
                         guard let webView = webViewReference else { return }
                         if fakeNitro {
                             enableFakeNitro(webView)
