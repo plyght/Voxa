@@ -57,3 +57,7 @@ func enableFakeNitro(_ webView: WKWebView) {
     webView.reload()
     webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 }
+
+#Preview {
+    DiscordWindowContent(channelClickWidth: 1000)
+}
