@@ -145,8 +145,9 @@ struct WebView: NSViewRepresentable {
         // Store a weak reference in Coordinator to break potential cycles
         context.coordinator.webView = webView
         
-        // Set UI delegate
+        // delegates
         webView.uiDelegate = context.coordinator
+        webView.navigationDelegate = context.coordinator
         
         // Make background transparent
         webView.setValue(false, forKey: "drawsBackground")
@@ -247,7 +248,7 @@ struct WebView: NSViewRepresentable {
         // you can do so. Currently, no updates are necessary.
     }
     
-    class Coordinator: NSObject, WKScriptMessageHandler, WKUIDelegate {
+    class Coordinator: NSObject, WKScriptMessageHandler, WKUIDelegate, WKNavigationDelegate {
         // Weak reference to avoid strong reference cycles
         weak var webView: WKWebView?
         
@@ -283,6 +284,15 @@ struct WebView: NSViewRepresentable {
         
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {}
+        
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let url = navigationAction.request.url, navigationAction.navigationType == .linkActivated {
+                NSWorkspace.shared.open(url)
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
+        }
     }
 }
 
