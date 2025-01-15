@@ -23,7 +23,7 @@ struct DiscordWindowContent: View {
                         customCSS: customCSS,
                         webViewReference: $webViewReference)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onChange(of: fakeNitro) { fakeNitro in
+                    .onChange(of: fakeNitro) {
                         guard let webView = webViewReference else { return }
                         if fakeNitro {
                             enableFakeNitro(webView)
@@ -35,7 +35,7 @@ struct DiscordWindowContent: View {
             
             // Draggable area for traffic lights
             DraggableView()
-                .frame(width: 70, height: 48)
+                .frame(height: 48)
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,4 +56,8 @@ func enableFakeNitro(_ webView: WKWebView) {
     let script = "enableFNitro();"
     webView.reload()
     webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+}
+
+#Preview {
+    DiscordWindowContent(channelClickWidth: 1000)
 }
