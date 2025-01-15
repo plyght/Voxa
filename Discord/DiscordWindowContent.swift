@@ -35,7 +35,7 @@ struct DiscordWindowContent: View {
             
             // Draggable area for traffic lights
             DraggableView()
-                .frame(width: 70, height: 48)
+                .frame(height: 48)
         }
         .ignoresSafeArea()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
