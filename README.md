@@ -54,7 +54,7 @@ https://voxa.peril.lol
 ### Most of these will be fixing [Known Issues](#Known-Issues)
 
 - Proper file uploading support
-- ~~Proper link handling~~
+- ~~Proper link handling~~ Fixed by https://github.com/plyght/Voxa/pull/13
 
 
  ## Star History
