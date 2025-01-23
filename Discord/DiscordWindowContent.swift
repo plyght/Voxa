@@ -3,9 +3,7 @@ import WebKit
 
 struct DiscordWindowContent: View {
     var channelClickWidth: CGFloat
-    var initialURL: String = "https://discord.com/channels/@me"
-    var customCSS: String?
-    @AppStorage("FakeNitro") var fakeNitro: Bool = false
+    var initialURL: String = "https://discord.com/app"
     
     // Reference to the underlying WKWebView
     @State var webViewReference: WKWebView?
@@ -20,16 +18,10 @@ struct DiscordWindowContent: View {
                 // Embed the Discord WebView
                 WebView(channelClickWidth: channelClickWidth,
                         initialURL: initialURL,
-                        customCSS: customCSS,
                         webViewReference: $webViewReference)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onChange(of: fakeNitro) {
-                        guard let webView = webViewReference else { return }
-                        if fakeNitro {
-                            enableFakeNitro(webView)
-                        } else {
-                            disableFakeNitro(webView)
-                        }
+                    .onChange(of: webViewReference) {
+                        Vars.webViewReference = webViewReference
                     }
             }
             
@@ -44,18 +36,6 @@ struct DiscordWindowContent: View {
             print("DiscordWindowContent disappeared.")
         }
     }
-}
-
-func disableFakeNitro(_ webView: WKWebView) {
-    let script = "disableFNitro();"
-    webView.reload()
-    webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
-}
-
-func enableFakeNitro(_ webView: WKWebView) {
-    let script = "enableFNitro();"
-    webView.reload()
-    webView.configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 }
 
 #Preview {

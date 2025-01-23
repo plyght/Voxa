@@ -1,12 +1,11 @@
-//
-//  FakeNitro.js
-//  Discord
-//
-//  Created by Stossy11 on 06/01/2025.
-//
+// ==VoxaPlugin==
+// @name: FakeNitro
+// @author: Stossy11
+// @description: Simulates Nitro.
+// ==/VoxaPlugin==
 
 let z;
-let isEnabled = false;  // Flag to control the script's execution
+let isEnabled = true;  // Flag to control the script's execution
 
 function loader() {
     if (!isEnabled) {
@@ -113,11 +112,3 @@ function loader() {
 }
 
 z = setInterval(loader, 1);
-                                   
-function enableFNitro() {
-    isEnabled = true;
-}
-
-function disableFNitro() {
-    isEnabled = false;
-}

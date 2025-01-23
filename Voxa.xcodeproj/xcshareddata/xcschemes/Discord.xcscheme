@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "D910A0842CF2B6F8005F6119"
-            BuildableName = "Discord.app"
+            BuildableName = "Voxa.app"
             BlueprintName = "Discord"
             ReferencedContainer = "container:Voxa.xcodeproj">
          </BuildableReference>
