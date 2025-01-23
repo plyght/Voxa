@@ -121,29 +121,18 @@ struct DiscordApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+				.frame(minWidth: 800, minHeight: 400)
                 .onAppear {
                     // Use a guard to ensure there's a main screen
                     if (NSScreen.main == nil) {
                         print("No available main screen to set initial window frame.")
                         return
                     }
-                    
+					
                     // If there's a main application window, configure it
                     if let window = NSApplication.shared.windows.first {
-						// Get the visible frame of the main screen
-						let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-						
-						// Set the window frame to match the screen's visible frame
-						window.setFrame(screenFrame, display: true)
-						
 						// Configure window for resizing
 						window.styleMask.insert(.resizable)
-						
-						// Optionally, set min/max sizes if needed
-						window.minSize = NSSize(width: 600, height: 400)
-						
-						// Disable frame autosaving
-						window.setFrameAutosaveName("")
 						
 						// Assign delegate for traffic light positioning
 						window.delegate = appDelegate.windowDelegate

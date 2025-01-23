@@ -4,13 +4,14 @@ Voxa is a sleek, lightweight, native macOS Discord client built using SwiftUI. D
 
 ![SCR-20250116-mutv](https://github.com/user-attachments/assets/68c662e9-368b-4e9d-9d8a-ffde4e1b6c06)
 
-
 ## This project wouldn't have started without [@AustinGraphics](https://github.com/AustinGraphics), go support him!
 
 ### Discord Server
+
 https://discord.gg/Dps8HnDBpw
 
 ### Website (in development)<sup><a href="#1source-code-repository---this-contains-the-source-code-and-related-documentation-for-the-project">1</a></sup>.
+
 https://voxa.peril.lol
 
 ## Key Features
@@ -20,13 +21,13 @@ https://voxa.peril.lol
 - **Customizable Interface:** Modify appearance with custom CSS and theming.
 - **Advanced Window Management:** Resizable and draggable windows with transparency and aesthetic layouts.
 - **Privacy-First Permissions:** Fine-grained microphone, camera, and location access are available only when needed.
-- **FakeNitro and other Vencord plugins:** FakeNitro has recently been implemented into Voxa, and other Vencord plugins are expected soon! See [Upcoming Features](#upcoming-features).
+- **FakeNitro and other Vencord plugins:** FakeNitro and Apple Emojis have recently been implemented into Voxa, and other BetterDiscord/Vencord plugins are expected soon! See [Upcoming Features](#upcoming-features).
 
 ## Known Issues
+
 - Some items are fully transparent, lacking any translucency or blur effects.
 - Certain items have not been fully integrated with transparent/translucent features.
 - Light mode has a few minor, easily resolvable issues.
-- The "Upload File" button is non-functional, requiring users to drag and drop files above the window for uploading.
 
 ---
 
@@ -40,24 +41,27 @@ https://voxa.peril.lol
 ## Installation
 
 ### Using a Prebuilt Release
+
 1. Download the latest `.dmg` file from the [Releases page](https://github.com/plyght/voxa/releases).
 2. Open the `.dmg` file and drag the Voxa app to your `Applications` folder.
 3. Launch Voxa from your Applications folder.
 
 ### Building From Source
+
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/plyght/Voxa.git
-   cd Voxa
+    ```bash
+    git clone https://github.com/plyght/Voxa.git
+    cd Voxa
+    ```
 
 ## Upcoming Features
+
 ### Most of these will be fixing [Known Issues](#Known-Issues)
 
-- Proper file uploading support
+- ~~Proper file uploading support~~ Fixed by https://github.com/plyght/Voxa/pull/18
 - ~~Proper link handling~~ Fixed by https://github.com/plyght/Voxa/pull/13
 
-
- ## Star History
+## Star History
 
 <a href="https://star-history.com/#plyght/voxa&Date">
  <picture>
