@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AppKit
+import Foundation
 
 class WindowDelegate: NSObject, NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {
@@ -56,62 +57,111 @@ class WindowDelegate: NSObject, NSWindowDelegate {
 @main
 struct DiscordApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @AppStorage("FakeNitro") var fakeNitro: Bool = false
+    
+    func extractMetadata(from plugin: String) -> ([String: String]) {
+        var metadata = [String: String]()
+        
+        let lines = plugin.components(separatedBy: "\n")
+
+        for line in lines {
+            if line.contains ("==/VoxaPlugin==") {
+                return metadata
+            }
+            
+            if line.trimmingCharacters(in: .whitespaces).starts(with: "// @") {
+                let cleanedLine = line.replacingOccurrences(of: "// @", with: "").trimmingCharacters(in: .whitespaces)
+                if let separatorIndex = cleanedLine.firstIndex(of: ":") {
+                    let key = String(cleanedLine[..<separatorIndex]).trimmingCharacters(in: .whitespaces)
+                    let value = String(cleanedLine[cleanedLine.index(after: separatorIndex)...]).trimmingCharacters(in: .whitespaces)
+                    metadata[key] = value
+                }
+            }
+        }
+        
+        return metadata
+    }
+    
+    init() {
+        if let resourcePath = Bundle.main.resourcePath {
+            let fileManager = FileManager.default
+            
+            do {
+                let files = try fileManager.contentsOfDirectory(atPath: resourcePath)
+				let possiblePluginFiles = files.filter { $0.hasSuffix(".js") }
+                
+                for file in possiblePluginFiles {
+                    // Build the full file path
+                    let filePath = (resourcePath as NSString).appendingPathComponent(file)
+                    
+                    // Check if it's a file (not a directory)
+                    var isDir: ObjCBool = false
+                    if fileManager.fileExists(atPath: filePath, isDirectory: &isDir), !isDir.boolValue {
+						do {
+							let script = try String(contentsOfFile: filePath, encoding: .utf8)
+							var metadata = extractMetadata(from: script)
+							let pathWithoutExtension = (file as NSString).deletingPathExtension
+							let id = pathWithoutExtension.lowercased()
+
+							metadata["pathWithoutExtension"] = pathWithoutExtension
+							
+							Vars.plugins[id] = metadata
+						} catch {
+							print("Couldn't load plugin \(filePath): \(error.localizedDescription)")
+						}
+                    }
+                }
+            } catch {
+                print("Error reading files from Bundle: \(error.localizedDescription)")
+            }
+        } else {
+            print("Could not find the resource path in Bundle.main.")
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .onAppear {
                     // Use a guard to ensure there's a main screen
-                    guard let mainScreen = NSScreen.main else {
+                    if (NSScreen.main == nil) {
                         print("No available main screen to set initial window frame.")
                         return
                     }
                     
                     // If there's a main application window, configure it
                     if let window = NSApplication.shared.windows.first {
-                        let screenFrame = mainScreen.visibleFrame
-                        let newWidth: CGFloat = 1000
-                        let newHeight: CGFloat = 600
-                        
-                        // Center the window
-                        let centeredX = screenFrame.midX - (newWidth / 2)
-                        let centeredY = screenFrame.midY - (newHeight / 2)
-                        
-                        let initialFrame = NSRect(x: centeredX,
-                                                  y: centeredY,
-                                                  width: newWidth,
-                                                  height: newHeight)
-                        
-                        window.setFrame(initialFrame, display: true)
-                        
-                        // Configure window for resizing
-                        window.styleMask.insert(.resizable)
-                        
-                        // Set min/max sizes
-                        window.minSize = NSSize(width: 600, height: 400)
-                        window.maxSize = NSSize(width: 2000, height: screenFrame.height)
-                        
-                        // Disable frame autosaving
-                        window.setFrameAutosaveName("")
-                        
-                        // Assign delegate for traffic light positioning
-                        window.delegate = appDelegate.windowDelegate
+						// Get the visible frame of the main screen
+						let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+						
+						// Set the window frame to match the screen's visible frame
+						window.setFrame(screenFrame, display: true)
+						
+						// Configure window for resizing
+						window.styleMask.insert(.resizable)
+						
+						// Optionally, set min/max sizes if needed
+						window.minSize = NSSize(width: 600, height: 400)
+						
+						// Disable frame autosaving
+						window.setFrameAutosaveName("")
+						
+						// Assign delegate for traffic light positioning
+						window.delegate = appDelegate.windowDelegate
                     }
                 }
         }
         .windowStyle(.hiddenTitleBar)
-        .commands {
-            CommandGroup(replacing: .windowArrangement) { }
-            
-            CommandMenu("Plugins") {
-                Button {
-                    fakeNitro.toggle()
-                } label: {
-                    Text("\(fakeNitro ? "Disable" : "Enable") Fake Nitro")
-                }
-                
-            }
+		.commands {
+			CommandGroup(replacing: .newItem) {
+				Button("Reload") {
+					hardReloadWebView(webView: Vars.webViewReference!)
+				}
+				.keyboardShortcut("r", modifiers: .command)
+			}
+		}
+        
+        Settings {
+            SettingsView()
         }
     }
 }

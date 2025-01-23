@@ -137,7 +137,7 @@ class SecondaryWindowController: NSWindowController {
         """
         
         // Create the SwiftUI view for the window with custom CSS
-        let contentView = SecondaryWindowView(url: url, channelClickWidth: channelClickWidth, customCSS: secondaryCSS)
+        let contentView = SecondaryWindowView(url: url, channelClickWidth: channelClickWidth)
         window.contentView = NSHostingView(rootView: contentView)
         
         self.init(window: window)
@@ -157,12 +157,10 @@ class SecondaryWindowController: NSWindowController {
 struct SecondaryWindowView: View {
     let url: String
     let channelClickWidth: CGFloat
-    let customCSS: String
     
     var body: some View {
         DiscordWindowContent(channelClickWidth: channelClickWidth,
-                           initialURL: url,
-                           customCSS: customCSS)
+                           initialURL: url)
             .frame(minWidth: 200, minHeight: 200)
     }
 }
@@ -173,7 +171,7 @@ struct SecondaryWindowScene: Scene {
     
     var body: some Scene {
         WindowGroup {
-            SecondaryWindowView(url: url, channelClickWidth: channelClickWidth, customCSS: "")
+            SecondaryWindowView(url: url, channelClickWidth: channelClickWidth)
         }
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
