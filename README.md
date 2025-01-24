@@ -21,7 +21,7 @@ https://voxa.peril.lol
 - **Customizable Interface:** Modify appearance with custom CSS and theming.
 - **Advanced Window Management:** Resizable and draggable windows with transparency and aesthetic layouts.
 - **Privacy-First Permissions:** Fine-grained microphone, camera, and location access are available only when needed.
-- **FakeNitro and other Vencord plugins:** FakeNitro and Apple Emojis have recently been implemented into Voxa, and other BetterDiscord/Vencord plugins are expected soon! See [Upcoming Features](#upcoming-features).
+- **FakeNitro and other Vencord plugins:** FakeNitro and Apple Emojis have recently been implemented into Voxa and other BetterDiscord/Vencord plugins are expected soon! See [Upcoming Features](#upcoming-features).
 
 ## Known Issues
 
@@ -54,12 +54,8 @@ https://voxa.peril.lol
     cd Voxa
     ```
 
-## Upcoming Features
+## For Upcoming Features, See The (Voxa Roadmap)[https://github.com/users/plyght/projects/3]
 
-### Most of these will be fixing [Known Issues](#Known-Issues)
-
-- ~~Proper file uploading support~~ Fixed by https://github.com/plyght/Voxa/pull/18
-- ~~Proper link handling~~ Fixed by https://github.com/plyght/Voxa/pull/13
 
 ## Star History
 
