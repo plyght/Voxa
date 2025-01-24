@@ -54,7 +54,7 @@ https://voxa.peril.lol
     cd Voxa
     ```
 
-## For Upcoming Features, See The (Voxa Roadmap)[https://github.com/users/plyght/projects/3]
+## For Upcoming Features, See The [Voxa Roadmap](https://github.com/users/plyght/projects/3)
 
 
 ## Star History
