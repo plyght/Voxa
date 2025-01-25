@@ -88,6 +88,10 @@ func loadPluginsAndCSS(webView: WKWebView) {
         .mainCard_a6d69a {
             background-color: rgb(0, 0, 0, 0.15) !important;
         }
+
+        .listItem_c96c45:has(div[aria-label="Download Apps"]) {
+                display: none !important;
+        }
         """
 
     let initialScript = WKUserScript(
