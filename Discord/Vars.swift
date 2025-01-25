@@ -6,7 +6,7 @@ class Vars {
     static var activePlugins: [String] = []
 }
 
-func arrayToData(array: [String])-> Data {
+func arrayToData(array: [String]) -> Data {
     if let encoded = try? JSONEncoder().encode(array) {
         return encoded
     }
