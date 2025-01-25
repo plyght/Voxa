@@ -1,1 +1,101 @@
-**/.DS_Store
+# Xcode
+DerivedData/
+*.xcworkspace/
+xcuserdata/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/**/*
+*.xcscmblueprint
+
+# Swift Package Manager
+.build/
+.swiftpm/xcode/package.xcworkspace/
+Package.resolved
+
+# Cocoapods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# Accio
+Dependencies/
+.accio/
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+fastlane/tools/
+
+# CocoaPods Keys
+*.xcconfig
+
+# Archives
+*.xcarchive
+
+# App data
+*.appex.dSYM
+*.dSYM
+
+# Playground
+timeline.xctimeline
+playground.xcworkspace
+
+# Swift pm
+.swiftpm/
+
+# Bundle artifacts
+*.ipa
+*.app.dSYM.zip
+
+# Logs
+*.log
+
+# Dependency manager
+Cartfile.resolved
+
+# Other
+*.DS_Store
+*.swp
+*.lock
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.ipa
+*.app.dSYM
+*.xcuserdatad/ 
+
+# macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+
+# Temporary files
+.TemporaryItems
+.apdisk
+
+# SwiftLint
+.swiftlint.yml
+
+# Xcode logs
+*.xccovreport
+*.xccovreport/*
+*.xccovarchive
+*.xccovarchive/*
+
+# Index
+*.index
