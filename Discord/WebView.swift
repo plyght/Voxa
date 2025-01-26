@@ -1,5 +1,28 @@
 import SwiftUI
+import Foundation
 @preconcurrency import WebKit
+
+var accentColorCSS: String {
+    @AppStorage("sidebarDividerAccentColor") var sidebarDividerAccentColor: Bool = true
+    
+    if sidebarDividerAccentColor {
+        if let accentColor = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
+            let red = Int(accentColor.redComponent * 255)
+            let green = Int(accentColor.greenComponent * 255)
+            let blue = Int(accentColor.blueComponent * 255)
+            return String(format: "#%02X%02X%02X", red, green, blue)
+        }
+    }
+
+    return """
+    /* revert to --background-modifier-accent before override */
+    color-mix(
+        in oklab,
+        hsl(var(--primary-500-hsl) / 0.48) 100%,
+        hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
+    )
+    """
+}
 
 func loadPluginsAndCSS(webView: WKWebView) {
 
@@ -37,12 +60,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
         }
         
         .guildSeparator_d0c57e {
-            /* revert to --background-modifier-accent before override */
-            background-color: color-mix(
-                in oklab,
-                hsl(var(--primary-500-hsl) / 0.48) 100%,
-                hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
-              ) !important;
+            background-color: \(accentColorCSS) !important;
         }
         
 

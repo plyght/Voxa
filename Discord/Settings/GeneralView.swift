@@ -1,9 +1,11 @@
 import SwiftUI
 
 struct GeneralView: View {
+    @AppStorage("sidebarDividerAccentColor") private var sidebarDividerAccentColor: Bool = true
+
     var body: some View {
         ScrollView {
-            GroupBox {
+            Form {
                 HStack {
                     Text("Join The Discord")
                     Spacer()
@@ -13,10 +15,7 @@ struct GeneralView: View {
                         Vars.webViewReference!.load(request)
                     }
                 }
-                .padding(4)
-            }
-            .padding(.horizontal)
-            GroupBox {
+
                 HStack {
                     Text("Support Us On GitHub")
                     Spacer()
@@ -25,11 +24,20 @@ struct GeneralView: View {
                         NSWorkspace.shared.open(url)
                     }
                 }
-                .padding(4)
+
+                Toggle(isOn: $sidebarDividerAccentColor) {
+                    Text("Sidebar divider matches system accent color")
+                    Text("Modifying this setting will reload Voxa.")
+                        .foregroundStyle(.placeholder)
+                }
+                    .toggleStyle(.switch)
+                    .onChange(of: sidebarDividerAccentColor, { hardReloadWebView(webView: Vars.webViewReference!) })
             }
-            .padding(.horizontal)
-            .padding(.bottom)
+            .formStyle(.grouped)
         }
-        .padding(.top)
     }
+}
+
+#Preview {
+    GeneralView()
 }
