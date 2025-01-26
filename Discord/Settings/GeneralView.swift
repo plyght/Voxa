@@ -2,7 +2,6 @@ import SwiftUI
 
 struct GeneralView: View {
     @AppStorage("sidebarDividerAccentColor") private var sidebarDividerAccentColor: Bool = true
-    @State private var sidebarDividerAccentColorToggleChanged = false
 
     var body: some View {
         ScrollView {
@@ -28,17 +27,11 @@ struct GeneralView: View {
 
                 Toggle(isOn: $sidebarDividerAccentColor) {
                     Text("Sidebar divider matches system accent color")
-                    if sidebarDividerAccentColorToggleChanged {
-                        Text("Relaunch Voxa for this setting to take effect.")
-                            .foregroundStyle(.placeholder)
-                    }
+                    Text("Modifying this setting will reload Voxa.")
+                        .foregroundStyle(.placeholder)
                 }
                     .toggleStyle(.switch)
-                    .onChange(of: sidebarDividerAccentColor) {
-                        withAnimation {
-                            sidebarDividerAccentColorToggleChanged = true
-                        }
-                    }
+                    .onChange(of: sidebarDividerAccentColor, { hardReloadWebView(webView: Vars.webViewReference!) })
             }
             .formStyle(.grouped)
         }
