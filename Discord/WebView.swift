@@ -68,9 +68,9 @@ func loadPluginsAndCSS(webView: WKWebView) {
         }
            
         .quickswitcher_f4e139 {
-                    background-color: transparent !important;
-                    -webkit-backdrop-filter: blur(5px) !important;
-                }
+            background-color: transparent !important;
+            -webkit-backdrop-filter: blur(5px) !important;
+        }
         
         .content_a7d72e {
             background: none !important;
@@ -105,7 +105,22 @@ func loadPluginsAndCSS(webView: WKWebView) {
         }
 
         .listItem_c96c45:has(div[aria-label="Download Apps"]) {
-                display: none !important;
+            display: none !important;
+        }
+        
+        // should fix strange out-of-place gradient-- weirdly does not
+        .children_fc4f04:after
+            background: none !important;
+        }
+        
+        .expandedFolderBackground_bc7085,
+        .folder_bc7085 {
+        /* revert to --background-secondary before override */
+            background: color-mix(
+                in oklab,
+                var(--primary-630) 100%,
+                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
+            ) !important;
         }
         """
 
