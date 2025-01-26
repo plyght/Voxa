@@ -228,7 +228,10 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "mediaStreamEnabled")
         config.preferences.setValue(true, forKey: "peerConnectionEnabled")
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
-        // config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+
+#if DEBUG
+        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+#endif
 
         // Edit CSP to allow for 3rd party scripts and stylesheets to be loaded
         config.setValue(
