@@ -33,7 +33,16 @@ func loadPluginsAndCSS(webView: WKWebView) {
         .guilds_a4d4d9 {
             background-color: rgb(0, 0, 0, 0.3) !important;
             border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
-            padding-top: 48px;
+            padding-top: 36px;
+        }
+        
+        .guildSeparator_d0c57e {
+            /* revert to --background-modifier-accent before override */
+            background-color: color-mix(
+                in oklab,
+                hsl(var(--primary-500-hsl) / 0.48) 100%,
+                hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
+              ) !important;
         }
 
         .theme-dark .themed_fc4f04 {
@@ -200,6 +209,7 @@ struct WebView: NSViewRepresentable {
 
         // Make background transparent
         webView.setValue(false, forKey: "drawsBackground")
+        webView.isInspectable = true
 
         // Add message handler
         webView.configuration.userContentController.add(context.coordinator, name: "channelClick")
