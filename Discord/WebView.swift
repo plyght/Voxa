@@ -63,11 +63,6 @@ let defaultCSS = """
         padding-top: 36px;
     }
     
-    .guildSeparator_d0c57e {
-        background-color: \(dividerAccentColor) !important;
-    }
-    
-    
     .theme-dark .themed_fc4f04 {
         background-color: transparent !important;
     }
@@ -175,13 +170,19 @@ func getPluginContents(name fileName: String) -> String {
 
 /// Loads plugins and CSS into the provided WebView
 func loadPluginsAndCSS(webView: WKWebView) {
+    let variableCSS = """
+        .guildSeparator_d0c57e {
+            background-color: \(dividerAccentColor) !important;
+        }
+        """
+
     // Inject default CSS
     webView.configuration.userContentController.addUserScript(
         WKUserScript(
             source: """
             const defaultStyle = document.createElement('style');
             defaultStyle.id = 'voxaStyle';
-            defaultStyle.textContent = `\(defaultCSS)`;
+            defaultStyle.textContent = `\(defaultCSS + "\n\n" + variableCSS)`;
             document.head.appendChild(defaultStyle);
             
             const customStyle = document.createElement('style');
