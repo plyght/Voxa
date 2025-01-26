@@ -1,10 +1,11 @@
 import SwiftUI
 import Foundation
+import UserNotifications
 @preconcurrency import WebKit
 
 var accentColorCSS: String {
     @AppStorage("sidebarDividerAccentColor") var sidebarDividerAccentColor: Bool = true
-    
+
     if sidebarDividerAccentColor {
         if let accentColor = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
             let red = Int(accentColor.redComponent * 255)
@@ -47,12 +48,12 @@ func loadPluginsAndCSS(webView: WKWebView) {
             --bg-overlay-3: transparent !important;
             --channeltextarea-background: transparent !important;
         }
-
+        
         .sidebar_a4d4d9 {
             background-color: rgb(0, 0, 0, 0.15) !important;
             border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
         }
-
+        
         .guilds_a4d4d9 {
             background-color: rgb(0, 0, 0, 0.3) !important;
             border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
@@ -63,24 +64,24 @@ func loadPluginsAndCSS(webView: WKWebView) {
             background-color: \(accentColorCSS) !important;
         }
         
-
+        
         .theme-dark .themed_fc4f04 {
             background-color: transparent !important;
         }
-
+        
         .channelTextArea_a7d72e {
             background-color: rgb(0, 0, 0, 0.15) !important;
         }
-
+        
         .button_df39bd {
             background-color: rgb(0, 0, 0, 0.15) !important;
         }
-
+        
         .chatContent_a7d72e {
             background-color: transparent !important;
             background: transparent !important;
         }
-
+        
         .chat_a7d72e {
             background: transparent !important;
         }
@@ -93,12 +94,12 @@ func loadPluginsAndCSS(webView: WKWebView) {
         .content_a7d72e {
             background: none !important;
         }
-
+        
         .container_eedf95 {
             position: relative;
             background-color: rgba(0, 0, 0, 0.5);
         }
-
+        
         .container_eedf95::before {
             content: '';
             position: absolute;
@@ -111,23 +112,23 @@ func loadPluginsAndCSS(webView: WKWebView) {
             background-color: inherit;
             z-index: -1;
         }
-
+        
         .container_a6d69a {
             background: transparent !important;
             background-color: transparent !important;
             backdrop-filter: blur(10px); !important;
         }
-
+        
         .mainCard_a6d69a {
             background-color: rgb(0, 0, 0, 0.15) !important;
         }
-
+        
         .listItem_c96c45:has(div[aria-label="Download Apps"]) {
             display: none !important;
         }
         
         // should fix strange out-of-place gradient-- weirdly does not
-        .children_fc4f04:after {
+        .children_fc4f04:after
             background: none !important;
         }
         
@@ -140,20 +141,23 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
             ) !important;
         }
+        
+        // css theme sillies
+        
         """
 
     let initialScript = WKUserScript(
         source: """
-                const defaultStyle = document.createElement('style');
-                defaultStyle.id = 'voxaStyle'
-                defaultStyle.textContent = `\(defaultCSS)`;
-                document.head.appendChild(defaultStyle);
-
-                const customStyle = document.createElement('style');
-                customStyle.id = 'voxaCustomStyle'
-                customStyle.textContent = "";
-                document.head.appendChild(customStyle);
-            """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        const defaultStyle = document.createElement('style');
+        defaultStyle.id = 'voxaStyle'
+        defaultStyle.textContent = `\(defaultCSS)`;
+        document.head.appendChild(defaultStyle);
+        
+        const customStyle = document.createElement('style');
+        customStyle.id = 'voxaCustomStyle'
+        customStyle.textContent = "";
+        document.head.appendChild(customStyle);
+        """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
     webView.configuration.userContentController.addUserScript(initialScript)
 
     // Load active plugins
@@ -188,7 +192,7 @@ struct WebView: NSViewRepresentable {
     var initialURL: String
     @Binding var webViewReference: WKWebView?
 
-    // 2. Multiple initializers for convenience
+    // Multiple initializers for convenience
     init(channelClickWidth: CGFloat, initialURL: String) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
@@ -246,7 +250,7 @@ struct WebView: NSViewRepresentable {
         // Store a weak reference in Coordinator to break potential cycles
         context.coordinator.webView = webView
 
-        // delegates
+        // Delegates
         webView.uiDelegate = context.coordinator
         webView.navigationDelegate = context.coordinator
 
@@ -259,61 +263,205 @@ struct WebView: NSViewRepresentable {
         // Add a debugging script for media permissions
         let permissionScript = WKUserScript(
             source: """
-                    const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-                    navigator.mediaDevices.getUserMedia = async function(constraints) {
-                        console.log('getUserMedia requested with constraints:', constraints);
-                        return originalGetUserMedia.call(navigator.mediaDevices, constraints);
-                    };
-
-                    const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
-                    navigator.mediaDevices.enumerateDevices = async function() {
-                        console.log('enumerateDevices requested');
-                        return originalEnumerateDevices.call(navigator.mediaDevices);
-                    };
-                """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+            navigator.mediaDevices.getUserMedia = async function(constraints) {
+                console.log('getUserMedia requested with constraints:', constraints);
+                return originalGetUserMedia.call(navigator.mediaDevices, constraints);
+            };
+            
+            const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
+            navigator.mediaDevices.enumerateDevices = async function() {
+                console.log('enumerateDevices requested');
+                return originalEnumerateDevices.call(navigator.mediaDevices);
+            };
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
         webView.configuration.userContentController.addUserScript(permissionScript)
-
-        #if DEBUG
-            if #available(iOS 16.4, *) {
-                webView.isInspectable = true
-            }
-        #endif
 
         // Monitor channel clicks, DMs, servers
         let channelClickScript = WKUserScript(
             source: """
-                    function attachClickListener() {
-                        document.addEventListener('click', function(e) {
-                            // Check for channel click
-                            const channel = e.target.closest('.blobContainer_a5ad63');
-                            if (channel) {
-                                window.webkit.messageHandlers.channelClick.postMessage({type: 'channel'});
-                                return;
-                            }
-
-                            // Check for link click (e.g., DMs)
-                            const link = e.target.closest('.link_c91bad');
-                            if (link) {
-                                e.preventDefault();
-                                let href = link.getAttribute('href') || link.href || '/channels/@me';
-                                if (href.startsWith('/')) {
-                                    href = 'https://discord.com' + href;
-                                }
-                                console.log('Link clicked with href:', href);
-                                window.webkit.messageHandlers.channelClick.postMessage({type: 'user', url: href});
-                                return;
-                            }
-
-                            // Check for server icon click
-                            const serverIcon = e.target.closest('.wrapper_f90abb');
-                            if (serverIcon) {
-                                window.webkit.messageHandlers.channelClick.postMessage({type: 'server'});
-                            }
-                        });
+            function attachClickListener() {
+                document.addEventListener('click', function(e) {
+                    // Check for channel click
+                    const channel = e.target.closest('.blobContainer_a5ad63');
+                    if (channel) {
+                        window.webkit.messageHandlers.channelClick.postMessage({type: 'channel'});
+                        return;
                     }
-                    attachClickListener();
-                """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            
+                    // Check for link click (e.g., DMs)
+                    const link = e.target.closest('.link_c91bad');
+                    if (link) {
+                        e.preventDefault();
+                        let href = link.getAttribute('href') || link.href || '/channels/@me';
+                        if (href.startsWith('/')) {
+                            href = 'https://discord.com' + href;
+                        }
+                        console.log('Link clicked with href:', href);
+                        window.webkit.messageHandlers.channelClick.postMessage({type: 'user', url: href});
+                        return;
+                    }
+            
+                    // Check for server icon click
+                    const serverIcon = e.target.closest('.wrapper_f90abb');
+                    if (serverIcon) {
+                        window.webkit.messageHandlers.channelClick.postMessage({type: 'server'});
+                    }
+                });
+            }
+            
+            attachClickListener();
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
         webView.configuration.userContentController.addUserScript(channelClickScript)
+
+        // Add message handlers for notifications
+        webView.configuration.userContentController.add(context.coordinator, name: "notify")
+        webView.configuration.userContentController.add(context.coordinator, name: "notificationPermission")
+
+        // Revised JavaScript to subclass Notification API and handle permissions correctly
+        let notificationScript = WKUserScript(
+            source: """
+            (function() {
+                // Keep a reference to the original Notification constructor
+                const OriginalNotification = window.Notification;
+            
+                // Default to "default" until we receive a nativePermissionResponse
+                let permissionStatus = 'default';
+            
+                // Map to store notification instances by their IDs
+                const notificationMap = new Map();
+            
+                // Make Notification.permission reflect our updated permission status
+                Object.defineProperty(Notification, 'permission', {
+                    get: function() {
+                        return permissionStatus;
+                    },
+                    configurable: true
+                });
+            
+                // Function to generate a unique identifier
+                function generateUUID() {
+                    // Simple UUID generator
+                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                        return v.toString(16);
+                    });
+                }
+            
+                // Create our Notification subclass
+                class CustomNotification extends OriginalNotification {
+                    constructor(title, options = {}) {
+                        const notificationId = generateUUID(); // Generate unique ID
+            
+                        // Assign the unique ID directly to the notification instance
+                        super(title, options);
+                        this.notificationId = notificationId;
+            
+                        // Store the notification instance in the map
+                        notificationMap.set(notificationId, this);
+            
+                        // Notify the native layer that a notification is being created
+                        window.webkit?.messageHandlers?.notify?.postMessage({ 
+                            title, 
+                            options, 
+                            notificationId 
+                        });
+            
+                        // Manually dispatch the 'show' event to indicate success
+                        setTimeout(() => {
+                            const showEvent = new Event('show');
+                            this.dispatchEvent(showEvent);
+            
+                            // If the site set this.onshow = ..., call it here
+                            if (typeof this.onshow === 'function') {
+                                this.onshow();
+                            }
+                        }, 0);
+                    }
+            
+                    // Override close() to notify the native layer
+                    close() {
+                        if (this.notificationId) {
+                            window.webkit?.messageHandlers?.closeNotification?.postMessage({
+                                id: this.notificationId
+                            });
+                        }
+                        super.close();
+                    }
+                }
+            
+                // Replace the global Notification with our subclass
+                window.Notification = CustomNotification;
+            
+                // Override requestPermission to handle async responses from native code
+                Notification.requestPermission = function(callback) {
+                    return new Promise((resolve) => {
+                        // Request permission via the native layer
+                        window.webkit?.messageHandlers?.notificationPermission?.postMessage({});
+                        // Store the resolver
+                        window.notificationPermissionCallback = resolve;
+                    }).then((permission) => {
+                        if (typeof callback === 'function') {
+                            callback(permission);
+                        }
+                        return permission;
+                    });
+                };
+            
+                // Listen for permission updates from native code
+                // and set permissionStatus accordingly
+                window.addEventListener('nativePermissionResponse', (event) => {
+                    if (window.notificationPermissionCallback) {
+                        permissionStatus = event.detail.permission || 'default';
+                        window.notificationPermissionCallback(permissionStatus);
+                        window.notificationPermissionCallback = null;
+                    }
+                });
+            
+                // Listen for notification error events from native code
+                window.addEventListener('notificationError', (event) => {
+                    const { notificationId, error } = event.detail;
+                    const notification = notificationMap.get(notificationId);
+                    if (notification) {
+                        // Dispatch the error event on the notification instance
+                        const errorEvent = new Event('error');
+                        notification.dispatchEvent(errorEvent);
+            
+                        // Optionally, pass the error message
+                        if (typeof notification.onerror === 'function') {
+                            notification.onerror(error);
+                        }
+            
+                        // Clean up the map
+                        notificationMap.delete(notificationId);
+                    }
+                });
+            
+                // Listen for notification success events from native code (Optional)
+                window.addEventListener('notificationSuccess', (event) => {
+                    const { notificationId } = event.detail;
+                    const notification = notificationMap.get(notificationId);
+                    if (notification) {
+                        // You can perform additional actions on success if needed
+                        console.log(`Notification successfully added: ${notificationId}`);
+            
+                        // Clean up the map
+                        notificationMap.delete(notificationId);
+                    }
+                });
+            
+            })();
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        webView.configuration.userContentController.addUserScript(notificationScript)
 
         loadPluginsAndCSS(webView: webView)
 
@@ -337,7 +485,7 @@ struct WebView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        // *Analysis*: If you wish to update the webView here (e.g., reload or inject new CSS),
+        // If you wish to update the webView here (e.g., reload or inject new CSS),
         // you can do so. Currently, no updates are necessary.
         loadPluginsAndCSS(webView: nsView)
     }
@@ -354,8 +502,9 @@ struct WebView: NSViewRepresentable {
 
         // Remove script message handler on deinit to avoid potential leaks
         deinit {
-            webView?.configuration.userContentController.removeScriptMessageHandler(
-                forName: "channelClick")
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: "channelClick")
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: "notify")
+            webView?.configuration.userContentController.removeScriptMessageHandler(forName: "notificationPermission")
         }
 
         @available(macOS 12.0, *)
@@ -390,17 +539,12 @@ struct WebView: NSViewRepresentable {
             }
         }
 
-        func userContentController(
-            _ userContentController: WKUserContentController,
-            didReceive message: WKScriptMessage
-        ) {}
-
         func webView(
             _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
             if let url = navigationAction.request.url,
-                navigationAction.navigationType == .linkActivated
+               navigationAction.navigationType == .linkActivated
             {
                 NSWorkspace.shared.open(url)
                 decisionHandler(.cancel)
@@ -412,6 +556,108 @@ struct WebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             loadPluginsAndCSS(webView: Vars.webViewReference ?? webView)
         }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            switch message.name {
+            case "notify":
+                guard
+                    let body = message.body as? [String: Any],
+                    let title = body["title"] as? String,
+                    let options = body["options"] as? [String: Any],
+                    let notificationId = body["notificationId"] as? String
+                else {
+                    print("Invalid notify message format")
+                    return
+                }
+
+                print("Received notify message: \(title) - \(options) - ID: \(notificationId)")
+
+                let notification = UNMutableNotificationContent()
+                notification.title = title
+                notification.body = options["body"] as? String ?? ""
+
+                if let soundName = options["sound"] as? String {
+                    notification.sound = UNNotificationSound(named: UNNotificationSoundName(soundName))
+                } else {
+                    notification.sound = .default
+                }
+
+                let request = UNNotificationRequest(
+                    identifier: notificationId,
+                    content: notification,
+                    trigger: nil
+                )
+
+                UNUserNotificationCenter.current().add(request) { [weak self] error in
+                    guard error == nil else {
+                        let error = error!
+                        print("Error adding notification: \(error.localizedDescription)")
+
+                        // Dispatch error event back to JavaScript with notificationId
+                        let errorScript = """
+                        window.dispatchEvent(new CustomEvent('notificationError', {
+                            detail: {
+                                notificationId: '\(notificationId)',
+                                error: '\(error.localizedDescription)'
+                            }
+                        }));
+                        """
+
+                        Task { @MainActor in
+                            do {
+                                _ = try await self?.webView?.evaluateJavaScript(errorScript)
+                                print("Success response dispatched to web content for notification ID: \(notificationId)")
+                            } catch {
+                                print("Error evaluating JavaScript: \(error.localizedDescription)")
+                            }
+                        }
+
+                        return
+                    }
+
+                    print("Notification added: \(title) - ID: \(notificationId)")
+
+                    // Optionally, confirm success to JavaScript
+                    let script = """
+                        window.dispatchEvent(new CustomEvent('notificationSuccess', {
+                            detail: {
+                                notificationId: '\(notificationId)'
+                            }
+                        }));
+                        """
+
+                    Task { @MainActor in
+                        do {
+                            _ = try await self?.webView?.evaluateJavaScript(script)
+                            print("Success response dispatched to web content for notification ID: \(notificationId)")
+                        } catch {
+                            print("Error evaluating JavaScript: \(error.localizedDescription)")
+                        }
+                    }
+                }
+
+            case "notificationPermission":
+                print("Received notificationPermission message")
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                    let permission = granted ? "granted" : "denied"
+                    print("Notification permission \(permission)")
+
+                    let script = "window.dispatchEvent(new CustomEvent('nativePermissionResponse', { detail: { permission: '\(permission)' } }));"
+
+                    Task { @MainActor in
+                        do {
+                            _ = try await self.webView?.evaluateJavaScript(script)
+                            print("Permission response dispatched to web content")
+                        } catch {
+                            print("Error evaluating JavaScript: \(error.localizedDescription)")
+                        }
+                    }
+                }
+
+            default:
+                print("Unimplemented notification message: \(message.name)")
+            }
+        }
     }
 }
 
@@ -419,7 +665,6 @@ func getPluginContents(name fileName: String) -> String {
     if let filePath = Bundle.main.path(forResource: fileName, ofType: "js") {
         do {
             let fileContent = try String(contentsOfFile: filePath, encoding: .utf8)
-
             return fileContent
         } catch {
             print("Error reading file: \(error.localizedDescription)")
