@@ -186,19 +186,14 @@ func loadPluginsAndCSS(webView: WKWebView) {
     )
 
     // Load active plugins
-    @AppStorage("activePlugins") var activePluginsData: Data = Data()
-    let activePlugins = dataToArray(stringArrayData: activePluginsData) ?? []
-
-    activePlugins.forEach { pluginId in
-        let pluginPath = Vars.plugins[pluginId]?["pathWithoutExtension"] ?? ""
-        let pluginScript = getPluginContents(name: pluginPath)
-
-        let pluginUserScript = WKUserScript(
-            source: pluginScript,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
+    activePlugins.forEach { plugin in
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: plugin.contents,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
         )
-        webView.configuration.userContentController.addUserScript(pluginUserScript)
     }
 }
 

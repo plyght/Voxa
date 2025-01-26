@@ -3,100 +3,83 @@ import WebKit
 
 struct PluginsView: View {
     @State public var pluginsChanged: Bool = false
-    
+
     var body: some View {
-        ScrollView {
-            GroupBox() {
-                VStack {
-                    let pluginIds = Vars.plugins.keys.sorted()
-                    
-                    ForEach(pluginIds.indices, id: \.self) { index in
-                        let pluginId = pluginIds[index]
-                        
-                        if let pluginMetadata = Vars.plugins[pluginId] {
-                            PluginList(plugin: pluginMetadata, pluginId: pluginId, showDivider: index != pluginIds.count - 1, pluginsChanged: $pluginsChanged)
-                        }
-                    }
-                }
-                .padding(4)
-            }
-            .padding(.horizontal)
-            if (pluginsChanged) {
-                GroupBox {
-                    HStack {
-                        Text("Refresh Voxa to Apply Changes")
-                        Spacer()
-                        Button("Refresh") {
-                            hardReloadWebView(webView: Vars.webViewReference!)
-                        }
-                    }
-                    .padding(4)
-                }
-                .padding(.horizontal)
-                .padding(.bottom)
+        Form {
+            ForEach(availablePlugins) { plugin in
+                PluginListItem(
+                    plugin: plugin,
+                    pluginsChanged: $pluginsChanged
+                )
             }
         }
-        .padding(.top)
+        .formStyle(.grouped)
+
+        if pluginsChanged {
+            Form {
+                HStack {
+                    Text("Refresh Voxa to Apply Changes")
+                    Spacer()
+                    Button("Refresh") {
+                        hardReloadWebView(webView: Vars.webViewReference!)
+
+                        withAnimation {
+                            pluginsChanged = false
+                        }
+                    }
+                }
+            }
+            .formStyle(.grouped)
+        }
     }
 }
 
-var activePlugins: [String] = []
-
-struct PluginList: View {
-    let plugin: [String: String]
-    let pluginId: String
-    let showDivider: Bool
-    
+struct PluginListItem: View {
+    let plugin: Plugin
     @Binding var pluginsChanged: Bool
-    
-    @AppStorage("activePlugins") private var activePluginsData: Data = Data()
-    
-    init (plugin: [String: String], pluginId: String, showDivider: Bool, pluginsChanged: Binding<Bool>) {
-        self.plugin = plugin
-        self.pluginId = pluginId
-        self.showDivider = showDivider
-        self._pluginsChanged = pluginsChanged
-        
-        activePlugins = dataToArray(stringArrayData: activePluginsData) ?? []
-    }
-    
+
     var body: some View {
-        HStack {
-            Form {
-                Section {
-                    Text(plugin["name"] ?? "Unknown")
-                } footer: {
-                    Text("By: " + (plugin["author"] ?? "An error occurred while trying to load the plugin.")).font(.system(size: 12, weight: .light))
-                    Text(plugin["description"] ?? "An error occurred while trying to load the plugin.").font(.system(size: 10, weight: .light))
-                }
-            }
-            Spacer()
-            if (plugin["url"] != nil) {
-                Button(action: {
-                    let url = URL(string: plugin["url"] ?? "http://voxa.peril.lol")!
-                    NSWorkspace.shared.open(url)
-                }) {
-                    Image(systemName: "globe")
-                        .foregroundColor(.blue)
-                }.buttonStyle(PlainButtonStyle())
-            }
-            Toggle("", isOn: Binding(
-                get: { activePlugins.contains(pluginId) },
+        Toggle(
+            isOn: Binding(
+                get: { activePlugins.contains(plugin) },
                 set: { isActive in
                     if isActive {
-                        activePlugins.append(pluginId)
+                        activePlugins.append(plugin)
                     } else {
-                        activePlugins.removeAll { $0 == pluginId }
+                        activePlugins.removeAll(where: { $0 == plugin })
                     }
-                    activePluginsData = arrayToData(array: activePlugins)
-                    pluginsChanged = true
+
+                    withAnimation {
+                        pluginsChanged = true
+                    }
                 }
-            ))
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-        }
-        if showDivider {
-            Divider()
+            )
+        ) {
+            Section {
+                HStack {
+                    Text(plugin.name)
+                        .foregroundStyle(.primary)
+
+                    if let url = plugin.url {
+                        Button {
+                            NSWorkspace.shared.open(url)
+                        } label: {
+                            Image(systemName: "globe")
+                                .foregroundColor(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            } footer: {
+                Text(plugin.author)
+                    .foregroundStyle(.secondary)
+                Text(plugin.description)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
+}
+
+#Preview {
+    PluginsView()
 }
