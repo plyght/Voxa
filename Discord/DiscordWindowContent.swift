@@ -16,15 +16,17 @@ struct DiscordWindowContent: View {
                 VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                 
                 // Embed the Discord WebView
-                WebView(channelClickWidth: channelClickWidth,
-                        initialURL: initialURL,
-                        webViewReference: $webViewReference)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onChange(of: webViewReference) {
-                        Vars.webViewReference = webViewReference
-                    }
+                WebView(
+                    channelClickWidth: channelClickWidth,
+                    initialURL: initialURL,
+                    webViewReference: $webViewReference
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: webViewReference) {
+                    Vars.webViewReference = webViewReference
+                }
             }
-            
+
             // Draggable area for traffic lights
             DraggableView()
                 .frame(height: 48)

@@ -1,9 +1,13 @@
 import SwiftUI
 import Foundation
 import UserNotifications
+import OSLog
 @preconcurrency import WebKit
 
-var accentColorCSS: String {
+// MARK: - Constants
+
+/// CSS for accent color customization
+var dividerAccentColor: String {
     @AppStorage("sidebarDividerAccentColor") var sidebarDividerAccentColor: Bool = true
 
     if sidebarDividerAccentColor {
@@ -16,7 +20,7 @@ var accentColorCSS: String {
     }
 
     return """
-    /* revert to --background-modifier-accent before override */
+    /* --background-modifier-accent */
     color-mix(
         in oklab,
         hsl(var(--primary-500-hsl) / 0.48) 100%,
@@ -25,185 +29,194 @@ var accentColorCSS: String {
     """
 }
 
+/// Default CSS applied to the WebView
+let defaultCSS = """
+    :root {
+        --background-accent: rgb(0, 0, 0, 0.5) !important;
+        --background-floating: transparent !important;
+        --background-message-highlight: transparent !important;
+        --background-message-highlight-hover: transparent !important;
+        --background-message-hover: transparent !important;
+        --background-mobile-primary: transparent !important;
+        --background-mobile-secondary: transparent !important;
+        --background-modifier-accent: transparent !important;
+        --background-modifier-active: transparent !important;
+        --background-modifier-hover: transparent !important;
+        --background-modifier-selected: transparent !important;
+        --background-nested-floating: transparent !important;
+        --background-primary: transparent !important;
+        --background-secondary: transparent !important;
+        --background-secondary-alt: transparent !important;
+        --background-tertiary: transparent !important;
+        --bg-overlay-3: transparent !important;
+        --channeltextarea-background: transparent !important;
+    }
+    
+    .sidebar_a4d4d9 {
+        background-color: rgb(0, 0, 0, 0.15) !important;
+        border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
+    }
+    
+    .guilds_a4d4d9 {
+        background-color: rgb(0, 0, 0, 0.3) !important;
+        border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
+        padding-top: 36px;
+    }
+    
+    .guildSeparator_d0c57e {
+        background-color: \(dividerAccentColor) !important;
+    }
+    
+    
+    .theme-dark .themed_fc4f04 {
+        background-color: transparent !important;
+    }
+    
+    .channelTextArea_a7d72e {
+        background-color: rgb(0, 0, 0, 0.15) !important;
+    }
+    
+    .button_df39bd {
+        background-color: rgb(0, 0, 0, 0.15) !important;
+    }
+    
+    .chatContent_a7d72e {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    .chat_a7d72e {
+        background: transparent !important;
+    }
+       
+    .quickswitcher_f4e139 {
+        background-color: transparent !important;
+        -webkit-backdrop-filter: blur(5px) !important;
+    }
+    
+    .content_a7d72e {
+        background: none !important;
+    }
+    
+    .container_eedf95 {
+        position: relative;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+    
+    .container_eedf95::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        backdrop-filter: none;
+        filter: blur(10px);
+        background-color: inherit;
+        z-index: -1;
+    }
+    
+    .container_a6d69a {
+        background: transparent !important;
+        background-color: transparent !important;
+        backdrop-filter: blur(10px); !important;
+    }
+    
+    .mainCard_a6d69a {
+        background-color: rgb(0, 0, 0, 0.15) !important;
+    }
+    
+    .listItem_c96c45:has(div[aria-label="Download Apps"]) {
+        display: none !important;
+    }
+    
+    // should fix strange out-of-place gradient-- weirdly does not
+    .children_fc4f04:after {
+        background: 0 !important;
+        width: 0 !important;
+    }
+    
+    .expandedFolderBackground_bc7085,
+    .folder_bc7085 {
+    /* revert to --background-secondary before override */
+        background: color-mix(
+            in oklab,
+            var(--primary-630) 100%,
+            var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
+        ) !important;
+    }
+    """
+
+// MARK: - Utility Functions
+
+/// Retrieves the contents of a plugin file
+func getPluginContents(name fileName: String) -> String {
+    if let filePath = Bundle.main.path(forResource: fileName, ofType: "js") {
+        do {
+            return try String(contentsOfFile: filePath, encoding: .utf8)
+        } catch {
+            print("Error reading plugin file contents: \(error.localizedDescription)")
+        }
+    }
+
+    return ""
+}
+
+// MARK: - Plugin and CSS Loader
+
+/// Loads plugins and CSS into the provided WebView
 func loadPluginsAndCSS(webView: WKWebView) {
-
-    let defaultCSS = """
-        :root {
-            --background-accent: rgb(0, 0, 0, 0.5) !important;
-            --background-floating: transparent !important;
-            --background-message-highlight: transparent !important;
-            --background-message-highlight-hover: transparent !important;
-            --background-message-hover: transparent !important;
-            --background-mobile-primary: transparent !important;
-            --background-mobile-secondary: transparent !important;
-            --background-modifier-accent: transparent !important;
-            --background-modifier-active: transparent !important;
-            --background-modifier-hover: transparent !important;
-            --background-modifier-selected: transparent !important;
-            --background-nested-floating: transparent !important;
-            --background-primary: transparent !important;
-            --background-secondary: transparent !important;
-            --background-secondary-alt: transparent !important;
-            --background-tertiary: transparent !important;
-            --bg-overlay-3: transparent !important;
-            --channeltextarea-background: transparent !important;
-        }
-        
-        .sidebar_a4d4d9 {
-            background-color: rgb(0, 0, 0, 0.15) !important;
-            border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
-        }
-        
-        .guilds_a4d4d9 {
-            background-color: rgb(0, 0, 0, 0.3) !important;
-            border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
-            padding-top: 36px;
-        }
-        
-        .guildSeparator_d0c57e {
-            background-color: \(accentColorCSS) !important;
-        }
-        
-        
-        .theme-dark .themed_fc4f04 {
-            background-color: transparent !important;
-        }
-        
-        .channelTextArea_a7d72e {
-            background-color: rgb(0, 0, 0, 0.15) !important;
-        }
-        
-        .button_df39bd {
-            background-color: rgb(0, 0, 0, 0.15) !important;
-        }
-        
-        .chatContent_a7d72e {
-            background-color: transparent !important;
-            background: transparent !important;
-        }
-        
-        .chat_a7d72e {
-            background: transparent !important;
-        }
-           
-        .quickswitcher_f4e139 {
-            background-color: transparent !important;
-            -webkit-backdrop-filter: blur(5px) !important;
-        }
-        
-        .content_a7d72e {
-            background: none !important;
-        }
-        
-        .container_eedf95 {
-            position: relative;
-            background-color: rgba(0, 0, 0, 0.5);
-        }
-        
-        .container_eedf95::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            backdrop-filter: none;
-            filter: blur(10px);
-            background-color: inherit;
-            z-index: -1;
-        }
-        
-        .container_a6d69a {
-            background: transparent !important;
-            background-color: transparent !important;
-            backdrop-filter: blur(10px); !important;
-        }
-        
-        .mainCard_a6d69a {
-            background-color: rgb(0, 0, 0, 0.15) !important;
-        }
-        
-        .listItem_c96c45:has(div[aria-label="Download Apps"]) {
-            display: none !important;
-        }
-        
-        // should fix strange out-of-place gradient-- weirdly does not
-        .children_fc4f04:after
-            background: none !important;
-        }
-        
-        .expandedFolderBackground_bc7085,
-        .folder_bc7085 {
-        /* revert to --background-secondary before override */
-            background: color-mix(
-                in oklab,
-                var(--primary-630) 100%,
-                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
-            ) !important;
-        }
-        
-        // css theme sillies
-        
-        """
-
-    let initialScript = WKUserScript(
-        source: """
-        const defaultStyle = document.createElement('style');
-        defaultStyle.id = 'voxaStyle'
-        defaultStyle.textContent = `\(defaultCSS)`;
-        document.head.appendChild(defaultStyle);
-        
-        const customStyle = document.createElement('style');
-        customStyle.id = 'voxaCustomStyle'
-        customStyle.textContent = "";
-        document.head.appendChild(customStyle);
-        """, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-    webView.configuration.userContentController.addUserScript(initialScript)
+    // Inject default CSS
+    webView.configuration.userContentController.addUserScript(
+        WKUserScript(
+            source: """
+            const defaultStyle = document.createElement('style');
+            defaultStyle.id = 'voxaStyle';
+            defaultStyle.textContent = `\(defaultCSS)`;
+            document.head.appendChild(defaultStyle);
+            
+            const customStyle = document.createElement('style');
+            customStyle.id = 'voxaCustomStyle';
+            customStyle.textContent = "";
+            document.head.appendChild(customStyle);
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
+    )
 
     // Load active plugins
     @AppStorage("activePlugins") var activePluginsData: Data = Data()
+    let activePlugins = dataToArray(stringArrayData: activePluginsData) ?? []
 
-    var activePlugins: [String] = []
-
-    activePlugins = dataToArray(stringArrayData: activePluginsData) ?? []
-
-    for pluginId in activePlugins {
-        let pluginPath: String = Vars.plugins[pluginId]?["pathWithoutExtension"] ?? ""
+    activePlugins.forEach { pluginId in
+        let pluginPath = Vars.plugins[pluginId]?["pathWithoutExtension"] ?? ""
         let pluginScript = getPluginContents(name: pluginPath)
 
-        let initialScriptTwo = WKUserScript(
-            source: pluginScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        webView.configuration.userContentController.addUserScript(initialScriptTwo)
+        let pluginUserScript = WKUserScript(
+            source: pluginScript,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
+        webView.configuration.userContentController.addUserScript(pluginUserScript)
     }
 }
 
-func hardReloadWebView(webView: WKWebView) {
-    webView.configuration.userContentController.removeAllUserScripts()
-
-    let link = URL(string: "https://discord.com/app")!
-    let request = URLRequest(url: link)
-    webView.load(request)
-
-    loadPluginsAndCSS(webView: webView)
-}
+// MARK: - WebView Representable
 
 struct WebView: NSViewRepresentable {
     var channelClickWidth: CGFloat
     var initialURL: String
     @Binding var webViewReference: WKWebView?
 
-    // Multiple initializers for convenience
+    // Initializers
     init(channelClickWidth: CGFloat, initialURL: String) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
         self._webViewReference = .constant(nil)
     }
 
-    init(
-        channelClickWidth: CGFloat,
-        initialURL: String,
-        webViewReference: Binding<WKWebView?>
-    ) {
+    init(channelClickWidth: CGFloat, initialURL: String, webViewReference: Binding<WKWebView?>) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
         self._webViewReference = webViewReference
@@ -214,6 +227,8 @@ struct WebView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> WKWebView {
+        // MARK: WebView Configuration
+
         let config = WKWebViewConfiguration()
 
         config.applicationNameForUserAgent = "Version/17.2.1 Safari/605.1.15"
@@ -233,253 +248,196 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "peerConnectionEnabled")
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
 
-#if DEBUG
+        // Allow inspector while app is running in DEBUG
+    #if DEBUG
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-#endif
+    #endif
 
         // Edit CSP to allow for 3rd party scripts and stylesheets to be loaded
         config.setValue(
             "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';",
-            forKey: "overrideContentSecurityPolicy")
+            forKey: "overrideContentSecurityPolicy"
+        )
+
+        // MARK: WebView Initialisation
 
         let webView = WKWebView(frame: .zero, configuration: config)
-        DispatchQueue.main.async {
-            webViewReference = webView
-        }
+        Task { @MainActor in webViewReference = webView }
 
         // Store a weak reference in Coordinator to break potential cycles
         context.coordinator.webView = webView
 
-        // Delegates
+        // Configure webview delegates
         webView.uiDelegate = context.coordinator
         webView.navigationDelegate = context.coordinator
 
         // Make background transparent
         webView.setValue(false, forKey: "drawsBackground")
 
-        // Add message handler
+        // Add message handlers
+        // If these properties are added to, ensure you remove the handlers as well in `Coordinator` `deinit`
         webView.configuration.userContentController.add(context.coordinator, name: "channelClick")
-
-        // Add a debugging script for media permissions
-        let permissionScript = WKUserScript(
-            source: """
-            const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
-            navigator.mediaDevices.getUserMedia = async function(constraints) {
-                console.log('getUserMedia requested with constraints:', constraints);
-                return originalGetUserMedia.call(navigator.mediaDevices, constraints);
-            };
-            
-            const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
-            navigator.mediaDevices.enumerateDevices = async function() {
-                console.log('enumerateDevices requested');
-                return originalEnumerateDevices.call(navigator.mediaDevices);
-            };
-            """,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        )
-        webView.configuration.userContentController.addUserScript(permissionScript)
-
-        // Monitor channel clicks, DMs, servers
-        let channelClickScript = WKUserScript(
-            source: """
-            function attachClickListener() {
-                document.addEventListener('click', function(e) {
-                    // Check for channel click
-                    const channel = e.target.closest('.blobContainer_a5ad63');
-                    if (channel) {
-                        window.webkit.messageHandlers.channelClick.postMessage({type: 'channel'});
-                        return;
-                    }
-            
-                    // Check for link click (e.g., DMs)
-                    const link = e.target.closest('.link_c91bad');
-                    if (link) {
-                        e.preventDefault();
-                        let href = link.getAttribute('href') || link.href || '/channels/@me';
-                        if (href.startsWith('/')) {
-                            href = 'https://discord.com' + href;
-                        }
-                        console.log('Link clicked with href:', href);
-                        window.webkit.messageHandlers.channelClick.postMessage({type: 'user', url: href});
-                        return;
-                    }
-            
-                    // Check for server icon click
-                    const serverIcon = e.target.closest('.wrapper_f90abb');
-                    if (serverIcon) {
-                        window.webkit.messageHandlers.channelClick.postMessage({type: 'server'});
-                    }
-                });
-            }
-            
-            attachClickListener();
-            """,
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        )
-        webView.configuration.userContentController.addUserScript(channelClickScript)
-
-        // Add message handlers for notifications
         webView.configuration.userContentController.add(context.coordinator, name: "notify")
         webView.configuration.userContentController.add(context.coordinator, name: "notificationPermission")
 
-        // Revised JavaScript to subclass Notification API and handle permissions correctly
-        let notificationScript = WKUserScript(
-            source: """
-            (function() {
-                // Keep a reference to the original Notification constructor
-                const OriginalNotification = window.Notification;
-            
-                // Default to "default" until we receive a nativePermissionResponse
-                let permissionStatus = 'default';
-            
-                // Map to store notification instances by their IDs
-                const notificationMap = new Map();
-            
-                // Make Notification.permission reflect our updated permission status
-                Object.defineProperty(Notification, 'permission', {
-                    get: function() {
-                        return permissionStatus;
-                    },
-                    configurable: true
-                });
-            
-                // Function to generate a unique identifier
-                function generateUUID() {
-                    // Simple UUID generator
-                    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-                        return v.toString(16);
-                    });
-                }
-            
-                // Create our Notification subclass
-                class CustomNotification extends OriginalNotification {
-                    constructor(title, options = {}) {
-                        const notificationId = generateUUID(); // Generate unique ID
-            
-                        // Assign the unique ID directly to the notification instance
-                        super(title, options);
-                        this.notificationId = notificationId;
-            
-                        // Store the notification instance in the map
-                        notificationMap.set(notificationId, this);
-            
-                        // Notify the native layer that a notification is being created
-                        window.webkit?.messageHandlers?.notify?.postMessage({ 
-                            title, 
-                            options, 
-                            notificationId 
-                        });
-            
-                        // Manually dispatch the 'show' event to indicate success
-                        setTimeout(() => {
-                            const showEvent = new Event('show');
-                            this.dispatchEvent(showEvent);
-            
-                            // If the site set this.onshow = ..., call it here
-                            if (typeof this.onshow === 'function') {
-                                this.onshow();
-                            }
-                        }, 0);
-                    }
-            
-                    // Override close() to notify the native layer
-                    close() {
-                        if (this.notificationId) {
-                            window.webkit?.messageHandlers?.closeNotification?.postMessage({
-                                id: this.notificationId
-                            });
-                        }
-                        super.close();
-                    }
-                }
-            
-                // Replace the global Notification with our subclass
-                window.Notification = CustomNotification;
-            
-                // Override requestPermission to handle async responses from native code
-                Notification.requestPermission = function(callback) {
-                    return new Promise((resolve) => {
-                        // Request permission via the native layer
-                        window.webkit?.messageHandlers?.notificationPermission?.postMessage({});
-                        // Store the resolver
-                        window.notificationPermissionCallback = resolve;
-                    }).then((permission) => {
-                        if (typeof callback === 'function') {
-                            callback(permission);
-                        }
-                        return permission;
-                    });
+        // MARK: Script Injection
+
+        // Media Permissions Script
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: """
+                const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+                navigator.mediaDevices.getUserMedia = async function(constraints) {
+                    console.log('getUserMedia requested with constraints:', constraints);
+                    return originalGetUserMedia.call(navigator.mediaDevices, constraints);
                 };
-            
-                // Listen for permission updates from native code
-                // and set permissionStatus accordingly
-                window.addEventListener('nativePermissionResponse', (event) => {
-                    if (window.notificationPermissionCallback) {
-                        permissionStatus = event.detail.permission || 'default';
-                        window.notificationPermissionCallback(permissionStatus);
-                        window.notificationPermissionCallback = null;
-                    }
-                });
-            
-                // Listen for notification error events from native code
-                window.addEventListener('notificationError', (event) => {
-                    const { notificationId, error } = event.detail;
-                    const notification = notificationMap.get(notificationId);
-                    if (notification) {
-                        // Dispatch the error event on the notification instance
-                        const errorEvent = new Event('error');
-                        notification.dispatchEvent(errorEvent);
-            
-                        // Optionally, pass the error message
-                        if (typeof notification.onerror === 'function') {
-                            notification.onerror(error);
-                        }
-            
-                        // Clean up the map
-                        notificationMap.delete(notificationId);
-                    }
-                });
-            
-                // Listen for notification success events from native code (Optional)
-                window.addEventListener('notificationSuccess', (event) => {
-                    const { notificationId } = event.detail;
-                    const notification = notificationMap.get(notificationId);
-                    if (notification) {
-                        // You can perform additional actions on success if needed
-                        console.log(`Notification successfully added: ${notificationId}`);
-            
-                        // Clean up the map
-                        notificationMap.delete(notificationId);
-                    }
-                });
-            
-            })();
-            """,
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: false
+                
+                const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
+                navigator.mediaDevices.enumerateDevices = async function() {
+                    console.log('enumerateDevices requested');
+                    return originalEnumerateDevices.call(navigator.mediaDevices);
+                };
+                """,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
         )
-        webView.configuration.userContentController.addUserScript(notificationScript)
+
+        // Channel Click Handler Script
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: """
+                (function () {
+                    document.addEventListener('click', function(e) {
+                        const channel = e.target.closest('.blobContainer_a5ad63');
+                        if (channel) {
+                            window.webkit.messageHandlers.channelClick.postMessage({type: 'channel'});
+                            return;
+                        }
+                
+                        const link = e.target.closest('.link_c91bad');
+                        if (link) {
+                            e.preventDefault();
+                            let href = link.getAttribute('href') || link.href || '/channels/@me';
+                            if (href.startsWith('/')) {
+                                href = 'https://discord.com' + href;
+                            }
+                            console.log('Link clicked with href:', href);
+                            window.webkit.messageHandlers.channelClick.postMessage({type: 'user', url: href});
+                            return;
+                        }
+                
+                        const serverIcon = e.target.closest('.wrapper_f90abb');
+                        if (serverIcon) {
+                            window.webkit.messageHandlers.channelClick.postMessage({type: 'server'});
+                        }
+                    });
+                })();
+                """,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
+
+        // Notification Handling Script
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: """
+                (function () {
+                    const Original = window.Notification;
+                    let perm = "default";
+                    const map = new Map();
+                
+                    Object.defineProperty(Notification, "permission", {
+                        get: () => perm,
+                        configurable: true,
+                    });
+                
+                    class VoxaNotification extends Original {
+                        constructor(title, options = {}) {
+                            const id = crypto.randomUUID().toUpperCase();
+                            super(title, options);
+                            this.notificationId = id;
+                            map.set(id, this);
+                            window.webkit?.messageHandlers?.notify?.postMessage({
+                                title,
+                                options,
+                                notificationId: id,
+                            });
+                
+                            this.onshow = null;
+                            setTimeout(() => {
+                                this.dispatchEvent(new Event("show"));
+                                if (typeof this._onshow === "function") this._onshow();
+                            }, 0);
+                        }
+                    
+                        close() {
+                            if (this.notificationId) {
+                                window.webkit?.messageHandlers?.closeNotification?.postMessage({
+                                    id: this.notificationId,
+                                });
+                            }
+                            super.close();
+                        }
+                    
+                        set onshow(h) { this._onshow = h; }
+                        get onshow() { return this._onshow; }
+                    
+                        set onerror(h) { this._onerror = h; }
+                        get onerror() { return this._onerror; }
+                    
+                        handleError(e) {
+                            if (typeof this._onerror === "function") this._onerror(e);
+                        }
+                    }
+                
+                    window.Notification = VoxaNotification;
+                
+                    Notification.requestPermission = function (cb) {
+                        return new Promise((resolve) => {
+                            window.webkit?.messageHandlers?.notificationPermission?.postMessage({});
+                            window.notificationPermissionCallback = resolve;
+                        }).then((res) => {
+                            if (typeof cb === "function") cb(res);
+                            return res;
+                        });
+                    };
+                
+                    window.addEventListener("nativePermissionResponse", (e) => {
+                        if (window.notificationPermissionCallback) {
+                            perm = e.detail.permission || "default";
+                            window.notificationPermissionCallback(perm);
+                            window.notificationPermissionCallback = null;
+                        }
+                    });
+                
+                    window.addEventListener("notificationError", (e) => {
+                        const { notificationId, error } = e.detail;
+                        const n = map.get(notificationId);
+                        if (n) {
+                            n.handleError(error);
+                            map.delete(notificationId);
+                        }
+                    });
+                
+                    window.addEventListener("notificationSuccess", (e) => {
+                        const { notificationId } = e.detail;
+                        const n = map.get(notificationId);
+                        if (n) {
+                            console.log(`Notification successfully added: ${notificationId}`);
+                            map.delete(notificationId);
+                        }
+                    });
+                })();
+                """,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+        )
 
         loadPluginsAndCSS(webView: webView)
-
-        // Safely load the provided URL, fallback if invalid
-        if let url = URL(string: initialURL) {
-            webView.load(URLRequest(url: url))
-        } else {
-            // Provide some fallback or show an error page if URL is invalid
-            let errorHTML = """
-                <html>
-                  <body>
-                    <h2>Invalid URL</h2>
-                    <p>The provided URL could not be parsed.</p>
-                  </body>
-                </html>
-                """
-            webView.loadHTMLString(errorHTML, baseURL: nil)
-        }
+        loadInitialURL(webView: webView) // TODO: swiftUI view err instead
 
         return webView
     }
@@ -490,22 +448,40 @@ struct WebView: NSViewRepresentable {
         loadPluginsAndCSS(webView: nsView)
     }
 
-    class Coordinator: NSObject, WKScriptMessageHandler, WKUIDelegate, WKNavigationDelegate {
-        // Weak reference to avoid strong reference cycles
-        weak var webView: WKWebView?
+    private func loadInitialURL(webView: WKWebView) {
+        if let url = URL(string: initialURL) {
+            webView.load(URLRequest(url: url))
+        } else {
+            let errorHTML = """
+                <html>
+                  <body>
+                    <h2>Invalid URL</h2>
+                    <p>The provided URL could not be parsed.</p>
+                  </body>
+                </html>
+                """
+            webView.loadHTMLString(errorHTML, baseURL: nil)
+        }
+    }
 
+    // MARK: - Coordinator
+
+    class Coordinator: NSObject, WKScriptMessageHandler, WKUIDelegate, WKNavigationDelegate {
+        weak var webView: WKWebView?
         var parent: WebView
 
         init(_ parent: WebView) {
             self.parent = parent
         }
 
-        // Remove script message handler on deinit to avoid potential leaks
         deinit {
+            // avoid memory leaks
             webView?.configuration.userContentController.removeScriptMessageHandler(forName: "channelClick")
             webView?.configuration.userContentController.removeScriptMessageHandler(forName: "notify")
             webView?.configuration.userContentController.removeScriptMessageHandler(forName: "notificationPermission")
         }
+
+        // MARK: - WKWebView Delegate Methods
 
         @available(macOS 12.0, *)
         func webView(
@@ -554,19 +530,21 @@ struct WebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            loadPluginsAndCSS(webView: Vars.webViewReference ?? webView)
+            loadPluginsAndCSS(webView: webView)
         }
+
+        // MARK: - Script Message Handling
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
-            case "notify":
+            case "notify": /// Notification payload is sent to webview
                 guard
                     let body = message.body as? [String: Any],
                     let title = body["title"] as? String,
                     let options = body["options"] as? [String: Any],
                     let notificationId = body["notificationId"] as? String
                 else {
-                    print("Invalid notify message format")
+                    print("Recieved malformed notify message.")
                     return
                 }
 
@@ -588,87 +566,95 @@ struct WebView: NSViewRepresentable {
                     trigger: nil
                 )
 
-                UNUserNotificationCenter.current().add(request) { [weak self] error in
+                UNUserNotificationCenter.current().add(request) { error in
                     guard error == nil else {
                         let error = error!
                         print("Error adding notification: \(error.localizedDescription)")
 
-                        // Dispatch error event back to JavaScript with notificationId
-                        let errorScript = """
-                        window.dispatchEvent(new CustomEvent('notificationError', {
-                            detail: {
-                                notificationId: '\(notificationId)',
-                                error: '\(error.localizedDescription)'
-                            }
-                        }));
-                        """
-
+                        // Dispatch notification error event
                         Task { @MainActor in
                             do {
-                                _ = try await self?.webView?.evaluateJavaScript(errorScript)
-                                print("Success response dispatched to web content for notification ID: \(notificationId)")
+                                try await self.webView?.evaluateJavaScript("""
+                                    window.dispatchEvent(
+                                        new CustomEvent('notificationError', {
+                                            detail: {
+                                                notificationId: '\(notificationId)',
+                                                error: '\(error.localizedDescription)'
+                                            }
+                                        })
+                                    );
+                                    """
+                                )
+                                print("Error response has additionally been dispatched to web content. (notificationId: \(notificationId))")
                             } catch {
-                                print("Error evaluating JavaScript: \(error.localizedDescription)")
+                                print("Error evaluating notification error event JavaScript: \(error.localizedDescription)")
                             }
                         }
-
                         return
                     }
 
                     print("Notification added: \(title) - ID: \(notificationId)")
 
-                    // Optionally, confirm success to JavaScript
-                    let script = """
-                        window.dispatchEvent(new CustomEvent('notificationSuccess', {
-                            detail: {
-                                notificationId: '\(notificationId)'
-                            }
-                        }));
-                        """
-
+                    // Dispatch notification success event
                     Task { @MainActor in
                         do {
-                            _ = try await self?.webView?.evaluateJavaScript(script)
+                            try await self.webView?.evaluateJavaScript("""
+                                window.dispatchEvent(
+                                    new CustomEvent('notificationSuccess', {
+                                        detail: {
+                                            notificationId: '\(notificationId)'
+                                        }
+                                    })
+                                );
+                                """
+                            )
                             print("Success response dispatched to web content for notification ID: \(notificationId)")
                         } catch {
-                            print("Error evaluating JavaScript: \(error.localizedDescription)")
+                            print("Error evaluating notification success event JavaScript: \(error.localizedDescription)")
                         }
                     }
                 }
 
-            case "notificationPermission":
+            case "notificationPermission": /// Notification permission payload is sent to webview
                 print("Received notificationPermission message")
                 UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
                     let permission = granted ? "granted" : "denied"
                     print("Notification permission \(permission)")
 
-                    let script = "window.dispatchEvent(new CustomEvent('nativePermissionResponse', { detail: { permission: '\(permission)' } }));"
-
+                    // Dispatch permission response event
                     Task { @MainActor in
                         do {
-                            _ = try await self.webView?.evaluateJavaScript(script)
+                            try await self.webView?.evaluateJavaScript("""
+                                window.dispatchEvent(
+                                    new CustomEvent('nativePermissionResponse', {
+                                        detail: {
+                                            permission: '\(permission)'
+                                        }
+                                    })
+                                );
+                                """
+                            )
                             print("Permission response dispatched to web content")
                         } catch {
-                            print("Error evaluating JavaScript: \(error.localizedDescription)")
+                            print("Error evaluating permission response event JavaScript: \(error.localizedDescription)")
                         }
                     }
                 }
 
             default:
-                print("Unimplemented notification message: \(message.name)")
+                print("Unimplemented message: \(message.name)")
             }
         }
     }
 }
 
-func getPluginContents(name fileName: String) -> String {
-    if let filePath = Bundle.main.path(forResource: fileName, ofType: "js") {
-        do {
-            let fileContent = try String(contentsOfFile: filePath, encoding: .utf8)
-            return fileContent
-        } catch {
-            print("Error reading file: \(error.localizedDescription)")
-        }
+
+/// Performs a hard reload of the WebView by clearing scripts and reloading the initial URL
+func hardReloadWebView(webView: WKWebView) {
+    webView.configuration.userContentController.removeAllUserScripts()
+    loadPluginsAndCSS(webView: webView)
+
+    if let url = URL(string: "https://discord.com/app") {
+        webView.load(URLRequest(url: url))
     }
-    return ""
 }
