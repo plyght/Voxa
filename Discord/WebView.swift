@@ -195,6 +195,7 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "mediaStreamEnabled")
         config.preferences.setValue(true, forKey: "peerConnectionEnabled")
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
+        // config.preferences.setValue(true, forKey: "developerExtrasEnabled")
 
         // Edit CSP to allow for 3rd party scripts and stylesheets to be loaded
         config.setValue(
@@ -215,7 +216,6 @@ struct WebView: NSViewRepresentable {
 
         // Make background transparent
         webView.setValue(false, forKey: "drawsBackground")
-        webView.isInspectable = true
 
         // Add message handler
         webView.configuration.userContentController.add(context.coordinator, name: "channelClick")
