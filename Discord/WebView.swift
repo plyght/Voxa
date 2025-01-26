@@ -44,6 +44,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
               ) !important;
         }
+        
 
         .theme-dark .themed_fc4f04 {
             background-color: transparent !important;
@@ -65,7 +66,12 @@ func loadPluginsAndCSS(webView: WKWebView) {
         .chat_a7d72e {
             background: transparent !important;
         }
-
+           
+        .quickswitcher_f4e139 {
+                    background-color: transparent !important;
+                    -webkit-backdrop-filter: blur(5px) !important;
+                }
+        
         .content_a7d72e {
             background: none !important;
         }
