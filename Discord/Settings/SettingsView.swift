@@ -23,7 +23,7 @@ struct SettingsView: View {
             switch selectedItem {
             case "general": GeneralView()
             case "plugins": PluginsView()
-            case "customcss": CustomCssView()
+            case "customcss": CustomCSSView()
             default: Text("")
             }
         }

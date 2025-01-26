@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-struct CustomCssView: View {
+struct CustomCSSView: View {
     @AppStorage("customCSS") private var customCSS: String = ""
 
     var body: some View {
