@@ -127,7 +127,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
         }
         
         // should fix strange out-of-place gradient-- weirdly does not
-        .children_fc4f04:after
+        .children_fc4f04:after {
             background: none !important;
         }
         
