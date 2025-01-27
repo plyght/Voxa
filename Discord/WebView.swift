@@ -7,26 +7,15 @@ import OSLog
 // MARK: - Constants
 
 /// CSS for accent color customization
-var dividerAccentColor: String {
-    @AppStorage("sidebarDividerAccentColor") var sidebarDividerAccentColor: Bool = true
-
-    if sidebarDividerAccentColor {
-        if let accentColor = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
-            let red = Int(accentColor.redComponent * 255)
-            let green = Int(accentColor.greenComponent * 255)
-            let blue = Int(accentColor.blueComponent * 255)
-            return String(format: "#%02X%02X%02X", red, green, blue)
-        }
+var hexAccentColor: String? {
+    if let accentColor = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
+        let red = Int(accentColor.redComponent * 255)
+        let green = Int(accentColor.greenComponent * 255)
+        let blue = Int(accentColor.blueComponent * 255)
+        return String(format: "#%02X%02X%02X", red, green, blue)
     }
 
-    return """
-    /* --background-modifier-accent */
-    color-mix(
-        in oklab,
-        hsl(var(--primary-500-hsl) / 0.48) 100%,
-        hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
-    )
-    """
+    return nil
 }
 
 /// Default CSS applied to the WebView
@@ -170,9 +159,41 @@ func getPluginContents(name fileName: String) -> String {
 
 /// Loads plugins and CSS into the provided WebView
 func loadPluginsAndCSS(webView: WKWebView) {
+    @AppStorage("discordUsesSystemAccent") var fullSystemAccent: Bool = true
+    @AppStorage("discordSidebarDividerUsesSystemAccent") var sidebarDividerSystemAccent: Bool = true
+
     let variableCSS = """
+        /* CSS variables that require reinitialisation on view reload */
+        
+        \({
+            guard let accent = hexAccentColor,
+                fullSystemAccent == true else {
+                return ""
+            }
+
+            return """
+            :root {
+                --bg-brand: \(accent) !important;
+                --brand-500: \(accent) !important;
+            }
+            """
+        }())
+        
         .guildSeparator_d0c57e {
-            background-color: \(dividerAccentColor) !important;
+            background-color: \({
+                guard let accent = hexAccentColor,
+                    sidebarDividerSystemAccent == true else {
+                    return """
+                    color-mix(/* --background-modifier-accent */
+                        in oklab,
+                        hsl(var(--primary-500-hsl) / 0.48) 100%,
+                        hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
+                    )
+                    """
+                }
+
+                return accent
+            }()) !important;
         }
         """
 

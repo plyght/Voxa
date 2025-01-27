@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct GeneralView: View {
-    @AppStorage("sidebarDividerAccentColor") private var sidebarDividerAccentColor: Bool = true
+    @AppStorage("discordUsesSystemAccent") private var fullSystemAccent: Bool = true
+    @AppStorage("discordSidebarDividerUsesSystemAccent") private var sidebarDividerSystemAccent: Bool = true
+
 
     var body: some View {
         ScrollView {
@@ -25,13 +27,20 @@ struct GeneralView: View {
                     }
                 }
 
-                Toggle(isOn: $sidebarDividerAccentColor) {
+                Toggle(isOn: $fullSystemAccent) {
+                    Text("Voxa matches system accent color")
+                    Text("Modifying this setting will reload Voxa.")
+                        .foregroundStyle(.placeholder)
+                }
+                .onChange(of: fullSystemAccent, { hardReloadWebView(webView: Vars.webViewReference!) })
+
+                Toggle(isOn: $sidebarDividerSystemAccent) {
                     Text("Sidebar divider matches system accent color")
                     Text("Modifying this setting will reload Voxa.")
                         .foregroundStyle(.placeholder)
                 }
-                    .toggleStyle(.switch)
-                    .onChange(of: sidebarDividerAccentColor, { hardReloadWebView(webView: Vars.webViewReference!) })
+                .onChange(of: sidebarDividerSystemAccent, { hardReloadWebView(webView: Vars.webViewReference!) })
+
             }
             .formStyle(.grouped)
         }
