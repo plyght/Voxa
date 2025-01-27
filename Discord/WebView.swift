@@ -3,6 +3,7 @@ import Foundation
 import UserNotifications
 import OSLog
 @preconcurrency import WebKit
+import Network         // For local IPC bridging (requires macOS 10.14+)
 
 // MARK: - Constants
 
@@ -235,6 +236,8 @@ struct WebView: NSViewRepresentable {
     var initialURL: String
     @Binding var webViewReference: WKWebView?
 
+    private let discordRPCBridge = DiscordRPCBridge()
+
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: String) {
         self.channelClickWidth = channelClickWidth
@@ -275,9 +278,9 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
 
         // Allow inspector while app is running in DEBUG
-    #if DEBUG
+#if DEBUG
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-    #endif
+#endif
 
         // Edit CSP to allow for 3rd party scripts and stylesheets to be loaded
         config.setValue(
@@ -462,94 +465,8 @@ struct WebView: NSViewRepresentable {
             )
         )
 
-        // arRPC Bridge Script
-        webView.configuration.userContentController.addUserScript(
-            WKUserScript(
-                source: """
-                window.addEventListener('load', (() => {
-                let Dispatcher, lookupAsset, lookupApp, apps = {};
-
-                const ws = new WebSocket('wss://127.0.0.1:1337'); // connect to arRPC bridge websocket
-                ws.onmessage = async x => {
-                  msg = JSON.parse(x.data);
-
-                  if (!Dispatcher) {
-                    let wpRequire;
-                    window.webpackChunkdiscord_app.push([[ Symbol() ], {}, x => wpRequire = x]);
-                    window.webpackChunkdiscord_app.pop();
-
-                    const modules = wpRequire.c;
-
-                    for (const id in modules) {
-                      const mod = modules[id].exports;
-                      if (!mod?.__esModule) continue;
-
-                      for (const prop in mod) {
-                        if (!mod.hasOwnProperty(prop)) continue;
-
-                        const candidate = mod[prop];
-                        if (candidate && candidate.register && candidate.wait) {
-                          Dispatcher = candidate;
-                          break;
-                        }
-                      }
-
-                      if (Dispatcher) break;
-                    }
-
-                    const factories = wpRequire.m;
-                    for (const id in factories) {
-                      if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
-                        const mod = wpRequire(id);
-
-                        // fetchAssetIds
-                        const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
-                        if (_lookupAsset) lookupAsset = async (appId, name) => (await _lookupAsset(appId, [ name, undefined ]))[0];
-                      }
-
-                      if (lookupAsset) break;
-                    }
-
-                    for (const id in factories) {
-                      if (factories[id].toString().includes('APPLICATION_RPC(')) {
-                        const mod = wpRequire(id);
-
-                        // fetchApplicationsRPC
-                        const _lookupApp = Object.values(mod).find(e => {
-                          if (typeof e !== 'function') return;
-                          const str = e.toString();
-                          return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
-                        });
-                        if (_lookupApp) lookupApp = async appId => {
-                          let socket = {};
-                          await _lookupApp(socket, appId);
-                          return socket.application;
-                        };
-                      }
-
-                      if (lookupApp) break;
-                    }
-                  }
-
-                  if (msg.activity?.assets?.large_image) msg.activity.assets.large_image = await lookupAsset(msg.activity.application_id, msg.activity.assets.large_image);
-                  if (msg.activity?.assets?.small_image) msg.activity.assets.small_image = await lookupAsset(msg.activity.application_id, msg.activity.assets.small_image);
-
-                  if (msg.activity) {
-                    const appId = msg.activity.application_id;
-                    if (!apps[appId]) apps[appId] = await lookupApp(appId);
-
-                    const app = apps[appId];
-                    if (!msg.activity.name) msg.activity.name = app.name;
-                  }
-
-                  Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', ...msg }); // set RPC status
-                };
-                }));
-                """,
-                injectionTime: .atDocumentStart,
-                forMainFrameOnly: false
-            )
-        )
+        // Start our new Swift-based “arRPC” bridging approach:
+        discordRPCBridge.startBridge(for: webView)
 
         loadPluginsAndCSS(webView: webView)
         loadInitialURL(webView: webView) // TODO: swiftUI view err instead
@@ -659,7 +576,7 @@ struct WebView: NSViewRepresentable {
                     let options = body["options"] as? [String: Any],
                     let notificationId = body["notificationId"] as? String
                 else {
-                    print("Recieved malformed notify message.")
+                    print("Received malformed notify message.")
                     return
                 }
 
