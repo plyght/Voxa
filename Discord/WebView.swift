@@ -3,6 +3,7 @@ import Foundation
 import UserNotifications
 import OSLog
 @preconcurrency import WebKit
+import Network         // For local IPC bridging (requires macOS 10.14+)
 
 // MARK: - Constants
 
@@ -235,6 +236,8 @@ struct WebView: NSViewRepresentable {
     var initialURL: String
     @Binding var webViewReference: WKWebView?
 
+    private let discordRPCBridge = DiscordRPCBridge()
+
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: String) {
         self.channelClickWidth = channelClickWidth
@@ -275,9 +278,9 @@ struct WebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "screenCaptureEnabled")
 
         // Allow inspector while app is running in DEBUG
-    #if DEBUG
+#if DEBUG
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-    #endif
+#endif
 
         // Edit CSP to allow for 3rd party scripts and stylesheets to be loaded
         config.setValue(
@@ -462,6 +465,9 @@ struct WebView: NSViewRepresentable {
             )
         )
 
+        // Start our new Swift-based “arRPC” bridging approach:
+        discordRPCBridge.startBridge(for: webView)
+
         loadPluginsAndCSS(webView: webView)
         loadInitialURL(webView: webView) // TODO: swiftUI view err instead
 
@@ -570,7 +576,7 @@ struct WebView: NSViewRepresentable {
                     let options = body["options"] as? [String: Any],
                     let notificationId = body["notificationId"] as? String
                 else {
-                    print("Recieved malformed notify message.")
+                    print("Received malformed notify message.")
                     return
                 }
 
