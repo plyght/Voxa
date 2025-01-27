@@ -74,15 +74,15 @@ struct Plugin: Identifiable, Equatable, Codable {
         let lines = rawPlugin.split(whereSeparator: \.isNewline)
 
         guard
-            let initialLine = lines.firstIndex(where: { $0.contains("==VoxaPlugin==") }),
-            let terminalLine = lines.firstIndex(where: { $0.contains("==/VoxaPlugin==") })
+            let initialLine = lines.firstIndex(where: {(try? Regex("==[^=]+==").firstMatch(in: String($0)) != nil) ?? false }),
+            let terminalLine = lines.firstIndex(where: { (try? Regex("==/[^=]+==").firstMatch(in: String($0)) != nil) ?? false })
         else {
             return
         }
 
         for line in lines[initialLine...terminalLine] {
             guard
-                let match = try? Regex(#"@(\w+): ([^\n]+)"#).firstMatch(in: String(line)),
+                let match = try? Regex(#"@(\w+):? ([^\n]+)"#).firstMatch(in: String(line)),
                 let label = match[1].substring,
                 let content = match[2].substring
             else {
