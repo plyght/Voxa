@@ -99,7 +99,7 @@ struct Plugin: Identifiable, Equatable, Codable {
             case "url":
                 self.url = URL(string: String(content))
             default:
-                print("Unhandled Plugin header label \(label); ignoring.")
+                print("Unhandled Plugin header label \"\(label)\"; ignoring.")
             }
         }
 
