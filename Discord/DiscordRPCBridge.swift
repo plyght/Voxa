@@ -28,8 +28,6 @@ class DiscordRPCBridge: NSObject {
     private var activitySocketCounter: Int = 0
     private var clientActivity: [Int32: (pid: Int, socketId: Int)] = [:]
 
-    // MARK: - Initialization
-
     /// Initializes the DiscordRPCBridge with the base path for Unix Domain Sockets.
     override init() {
         super.init()
@@ -217,10 +215,10 @@ class DiscordRPCBridge: NSObject {
         }
 
         let decoder = JSONDecoder()
-        let payload: IPC.MessagePayload
+        let payload: IPC.Message.Payload
 
         do {
-            payload = try decoder.decode(IPC.MessagePayload.self, from: payloadData)
+            payload = try decoder.decode(IPC.Message.Payload.self, from: payloadData)
         } catch let DecodingError.dataCorrupted(context) {
             self.logger.error("Decoding Error: Data corrupted - \(context.debugDescription) at \(context.codingPath)")
             return nil
@@ -300,7 +298,7 @@ class DiscordRPCBridge: NSObject {
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleHandshake(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+    private func handleHandshake(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         self.logger.info("Handling HANDSHAKE on FD \(fileDescriptor)")
 
         guard payload.v == 1 else {
@@ -319,7 +317,7 @@ class DiscordRPCBridge: NSObject {
         clientHandshakes[fileDescriptor] = true
         self.logger.info("Handshake successful for client \(clientId) on FD \(fileDescriptor)")
 
-        let acknowledgmentPayload = IPC.AckPayload(v: 1, client_id: clientId)
+        let acknowledgmentPayload = IPC.AcknowledgementPayload(v: 1, client_id: clientId)
         send(packet: acknowledgmentPayload, op: .handshake, to: fileDescriptor)
 
         let readyPayload = IPC.ReadyPayload(
@@ -354,7 +352,7 @@ class DiscordRPCBridge: NSObject {
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleFrame(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+    private func handleFrame(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         guard clientHandshakes[fileDescriptor] == true else {
             self.logger.error("Received FRAME before handshake on FD \(fileDescriptor)")
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
@@ -369,7 +367,7 @@ class DiscordRPCBridge: NSObject {
         self.logger.info("Handling FRAME command: \(command) on FD \(fileDescriptor)")
 
         switch command {
-        case "SET_ACTIVITY":
+        case "SET_ACTIVITY": /// https://discord.com/developers/docs/topics/rpc#setactivity
             handleSetActivity(with: payload, from: fileDescriptor)
         case "INVITE_BROWSER", "GUILD_TEMPLATE_BROWSER":
             handleInviteBrowser(with: payload.args, cmd: command, from: fileDescriptor)
@@ -390,7 +388,7 @@ class DiscordRPCBridge: NSObject {
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleSetActivity(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+    private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         guard let arguments = payload.args, var activity = arguments.activity else {
             self.logger.warning("Invalid SET_ACTIVITY arguments or missing pid on FD \(fileDescriptor)")
             respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Invalid arguments or missing pid", nonce: payload.nonce)
@@ -426,14 +424,14 @@ class DiscordRPCBridge: NSObject {
      - cmd: The command string.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleInviteBrowser(with args: IPC.MessagePayload.CommandArgs?, cmd: String, from fileDescriptor: Int32) {
+    private func handleInviteBrowser(with args: IPC.Message.Payload.CommandArgs?, cmd: String, from fileDescriptor: Int32) {
         guard let arguments = args, let code = arguments.code else {
             self.logger.warning("Missing code for command \(cmd) on FD \(fileDescriptor)")
             respondError(to: fileDescriptor, cmd: cmd, code: "MissingCode", nonce: UUID().uuidString /* cannot use the same nonce! */)
             return
         }
         self.logger.info("Command \(cmd) with code: \(code) on FD \(fileDescriptor)")
-        respondSuccess(to: fileDescriptor, with: IPC.MessagePayload(cmd: cmd, nonce: arguments.nonce, v: nil, client_id: nil, args: arguments))
+        respondSuccess(to: fileDescriptor, with: IPC.Message.Payload(cmd: cmd, nonce: arguments.nonce, v: nil, client_id: nil, args: arguments))
     }
 
     /**
@@ -443,7 +441,7 @@ class DiscordRPCBridge: NSObject {
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handlePing(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+    private func handlePing(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         self.logger.info("Handling PING on FD \(fileDescriptor)")
         let pongPayload = IPC.PongPayload(nonce: payload.nonce)
         send(packet: pongPayload, op: .pong, to: fileDescriptor)
@@ -505,11 +503,15 @@ class DiscordRPCBridge: NSObject {
      - fileDescriptor: The client socket file descriptor.
      - payload: The original IPC message payload.
      */
-    private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.MessagePayload) {
+    private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.Message.Payload) {
+        if payload.cmd == nil {
+            self.logger.warning("Command unknown; response body will be empty")
+        }
+
         let response = IPC.SuccessResponse(
+            cmd: payload.cmd ?? "",
             evt: nil,
             data: nil,
-            cmd: payload.cmd,
             nonce: payload.nonce
         )
         self.logger.info("Responding with success: \(String(describing: response))")
@@ -803,7 +805,7 @@ class DiscordRPCBridge: NSObject {
     }
 }
 
-// MARK: - IPC Structures
+// MARK: - Structures
 
 extension DiscordRPCBridge {
     /// Namespace for IPC related structures and enums.
@@ -817,59 +819,63 @@ extension DiscordRPCBridge {
         /// Represents an IPC message with operation code and payload.
         struct Message: Codable {
             let operationCode: OperationCode
-            let payload: MessagePayload
-        }
+            let payload: Payload
 
-        /// Structure representing the payload of an IPC message.
-        struct MessagePayload: Codable {
-            let cmd: String?
-            let nonce: String?
-            let v: Int?
-            let client_id: String?
-            let args: CommandArgs?
+            /// Structure representing the payload of an IPC message.
+            /// https://discord.com/developers/docs/topics/rpc#payloads-payload-structure
+            struct Payload: Codable {
+                let cmd: String?
+                let nonce: String?
+                let v: Int?
+                let client_id: String?
+                let args: CommandArgs?
 
-            enum CodingKeys: String, CodingKey {
-                case cmd, nonce, v, client_id, args
-            }
-
-            init(cmd: String?, nonce: String?, v: Int?, client_id: String?, args: CommandArgs?) {
-                self.cmd = cmd
-                self.nonce = nonce
-                self.v = v
-                self.client_id = client_id
-                self.args = args
-            }
-
-            init(from decoder: Decoder) throws {
-                let container = try decoder.container(keyedBy: CodingKeys.self)
-                self.cmd = try container.decodeIfPresent(String.self, forKey: .cmd)
-                self.nonce = try container.decodeIfPresent(String.self, forKey: .nonce)
-
-                // Handle different types for 'v'
-                if let intValue = try? container.decode(Int.self, forKey: .v) {
-                    self.v = intValue
-                } else if let stringValue = try? container.decode(String.self, forKey: .v),
-                          let intValue = Int(stringValue) {
-                    self.v = intValue
-                } else {
-                    self.v = nil
+                enum CodingKeys: String, CodingKey {
+                    case cmd, nonce, v, client_id, args
                 }
 
-                self.client_id = try container.decodeIfPresent(String.self, forKey: .client_id)
-                self.args = try container.decodeIfPresent(CommandArgs.self, forKey: .args)
-            }
+                init(cmd: String?, nonce: String?, v: Int?, client_id: String?, args: CommandArgs?) {
+                    self.cmd = cmd
+                    self.nonce = nonce
+                    self.v = v
+                    self.client_id = client_id
+                    self.args = args
+                }
 
-            /// Structure representing command arguments within the payload.
-            struct CommandArgs: Codable {
-                let pid: Int
-                let activity: Activity?
-                let code: String?
-                let nonce: String?
+                init(from decoder: Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.cmd = try container.decodeIfPresent(String.self, forKey: .cmd)
+                    self.nonce = try container.decodeIfPresent(String.self, forKey: .nonce)
+
+                    // Handle different types for 'v'
+                    if let intValue = try? container.decode(Int.self, forKey: .v) {
+                        self.v = intValue
+                    } else if let stringValue = try? container.decode(String.self, forKey: .v),
+                              let intValue = Int(stringValue) {
+                        self.v = intValue
+                    } else {
+                        self.v = nil
+                    }
+
+                    self.client_id = try container.decodeIfPresent(String.self, forKey: .client_id)
+                    self.args = try container.decodeIfPresent(CommandArgs.self, forKey: .args)
+                }
+
+                /// Structure representing command arguments within the payload.
+                /// https://discord.com/developers/docs/topics/rpc#setactivity-set-activity-argument-structure
+                struct CommandArgs: Codable {
+                    let pid: Int
+                    let activity: Activity?
+
+                    // + because too lazy to make new struct or sideload
+                    let code: String?
+                    let nonce: String?
+                }
             }
         }
 
         /// Structure representing an acknowledgment payload.
-        struct AckPayload: Codable {
+        struct AcknowledgementPayload: Codable {
             let v: Int
             let client_id: String
         }
@@ -909,16 +915,20 @@ extension DiscordRPCBridge {
             let nonce: String?
         }
 
+        protocol Response: Codable {
+            var cmd: String { get }
+        }
+
         /// Structure representing a successful response.
-        struct SuccessResponse: Codable {
+        struct SuccessResponse: Codable, Response {
+            let cmd: String
             let evt: String?
             let data: String?
-            let cmd: String?
             let nonce: String?
         }
 
         /// Structure representing an error response.
-        struct ErrorResponse: Codable {
+        struct ErrorResponse: Codable, Response {
             let cmd: String
             let evt: String
             let data: ErrorData
@@ -937,6 +947,7 @@ extension DiscordRPCBridge {
         }
 
         /// Enum representing operation codes for IPC.
+        /// https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-gateway-opcodes ?? arRPC had it tho
         enum OperationCode: Int32, Codable {
             case handshake = 0
             case frame = 1
@@ -960,6 +971,7 @@ extension DiscordRPCBridge {
             }
         }
 
+        // ?? arRPC had it tho
         /// Enum representing closure codes for IPC.
         enum ClosureCode: Int, IPCError {
             case normal = 1000
@@ -979,6 +991,7 @@ extension DiscordRPCBridge {
         }
 
         /// Enum representing error codes for IPC.
+        /// https://discord.com/developers/docs/topics/opcodes-and-status-codes#rpc-rpc-close-event-codes
         enum ErrorCode: Int, IPCError {
             case invalidClientID = 4000
             case invalidOrigin = 4001
@@ -1006,9 +1019,8 @@ extension DiscordRPCBridge {
         }
     }
 
-    // MARK: - Activity Struct
-
     /// Structure representing an activity.
+    /// https://discord.com/developers/docs/events/gateway-events#activity-object
     struct Activity: Codable {
         var name: String
         let type: Int
