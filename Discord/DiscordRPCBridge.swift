@@ -4,7 +4,6 @@
 //
 //  Created by vapidinfinity (esi) on 28/1/2025. 😮‍💨
 //
-// huge thanks to @vapidinfinity for the implementation
 
 import Foundation
 import WebKit
@@ -15,7 +14,7 @@ import SwiftUI
  A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
  It sets up a Unix Domain Socket server to listen for Discord IPC connections.
  */
-class DiscordRPCBridge: NSObject {
+class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the implementation
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
         category: "discordRPCBridge"
