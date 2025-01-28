@@ -124,20 +124,26 @@ let defaultCSS = """
     .expandedFolderBackground_bc7085,
     .folder_bc7085 {
     /* --background-secondary */
+    /*
         background: color-mix(
             in oklab,
             var(--primary-630) 100%,
             var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
         ) !important;
+    */
+        background: var(--activity-card-background) !important; /* weird fix but ok */
     }
     
     .floating_d1c246 {
     /* --background-primary */
+    /*
         background: color-mix(
             in oklab,
             var(--primary-600) 100%,
             var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
         ) !important;
+    */
+        background: var(--activity-card-background) !important; /* weird fix but ok */
     }
     """
 
