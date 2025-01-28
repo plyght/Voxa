@@ -388,32 +388,41 @@ class DiscordRPCBridge: NSObject {
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
-        guard let arguments = payload.args, var activity = arguments.activity else {
-            self.logger.warning("Invalid SET_ACTIVITY arguments or missing pid on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Invalid arguments or missing pid", nonce: payload.nonce)
+        private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+        guard let arguments = payload.args else {
+            self.logger.warning("Missing arguments for SET_ACTIVITY on FD \(fileDescriptor)")
+            respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
             return
         }
-
-        // 1. Copy application_id from handshake or use existing
-        if activity.applicationId == nil, let clientID = clientIds[fileDescriptor] {
-            activity.applicationId = clientID
+        
+        if var activity = arguments.activity {
+            // 1. Copy application_id from handshake or use existing
+            if activity.applicationId == nil, let clientID = clientIds[fileDescriptor] {
+                activity.applicationId = clientID
+            }
+    
+            // 2. Set the name based on application_id if it's still "Unknown Activity"
+            // Handled by asset fetching integration
+    
+            // 3. Handle instance => flags
+            let isInstance = activity.instance ?? false
+            activity.flags = isInstance ? (1 << 0) : 0
+    
+            // 4. Increment local counters and inject
+            activitySocketCounter += 1
+            let socketId = activitySocketCounter
+            clientActivity[fileDescriptor] = (arguments.pid, socketId)
+    
+            injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
+            respondSuccess(to: fileDescriptor, with: payload)
+        } else {
+            if let existingActivity = clientActivity[fileDescriptor] {
+                clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
+                clientActivity.removeValue(forKey: fileDescriptor)
+                self.logger.info("Cleared activity for FD \(fileDescriptor)")
+            }
+            respondSuccess(to: fileDescriptor, with: payload)
         }
-
-        // 2. Set the name based on application_id if it's still "Unknown Activity"
-        // Handled by asset fetching integration
-
-        // 3. Handle instance => flags
-        let isInstance = activity.instance ?? false
-        activity.flags = isInstance ? (1 << 0) : 0
-
-        // 4. Increment local counters and inject
-        activitySocketCounter += 1
-        let socketId = activitySocketCounter
-        clientActivity[fileDescriptor] = (arguments.pid, socketId)
-
-        injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
-        respondSuccess(to: fileDescriptor, with: payload)
     }
 
     /**
@@ -1163,9 +1172,10 @@ extension DiscordRPCBridge {
             if Darwin.connect(fileDescriptor, withUnsafePointer(to: &address) {
                 $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
             }, addressLength) < 0 {
-                self.logger.error("Failed to connect to socket at \(path)")
+                self.logger.warning("Socket at \(path) is unavailable; socket must be held or unused.")
                 return false
             }
+
             self.logger.debug("Successfully connected to socket at \(path)")
             close(fileDescriptor)
             return true
