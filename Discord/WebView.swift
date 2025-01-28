@@ -175,6 +175,14 @@ func loadPluginsAndCSS(webView: WKWebView) {
             return """
             :root {
                 --bg-brand: \(accent) !important;
+                \({ () -> String in
+                    var values = [String]()
+                    for i in stride(from: 5, through: 95, by: 5) {
+                        let hexAlpha = String(format: "%02X", Int(round((Double(i) / 100.0) * 255)))
+                        values.append("--brand-\(String(format: "%02d", i))a: \(accent)\(hexAlpha);")
+                    }
+                    return values.joined(separator: "\n")
+                }())
                 --brand-500: \(accent) !important;
             }
             """
