@@ -4,91 +4,19 @@
 //
 //  Created by vapidinfinity (esi) on 28/1/2025. 😮‍💨
 //
-
 // huge thanks to @vapidinfinity for the implementation
 
 import Foundation
 import WebKit
 import OSLog
+import SwiftUI
 
-/// Handles Unix Domain Socket operations.
-struct UnixDomainSocket {
-    static private let log = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
-        category: "unixDomainSocket"
-    )
-
-    /// Creates a Unix Domain Socket.
-    static func create(at path: String) -> Int32 {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        if fd < 0 {
-            self.log.error("Failed to create socket at \(path)")
-        } else {
-            self.log.debug("Created socket with FD \(fd) at \(path)")
-        }
-        return fd
-    }
-
-    /// Connects to a Unix Domain Socket.
-    static func connect(fd: Int32, to path: String) -> Bool {
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        strncpy(&addr.sun_path.0, path, MemoryLayout.size(ofValue: addr.sun_path) - 1)
-        let addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
-
-        if Darwin.connect(fd, withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
-        }, addrLen) < 0 {
-            self.log.error("Failed to connect to socket at \(path)")
-            return false
-        }
-        self.log.debug("Successfully connected to socket at \(path)")
-        close(fd)
-        return true
-    }
-
-    /// Binds the socket to the specified path.
-    static func bind(fd: Int32, to path: String) -> Bool {
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
-        strncpy(&addr.sun_path.0, path, MemoryLayout.size(ofValue: addr.sun_path) - 1)
-        let addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
-
-        if Darwin.bind(fd, withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
-        }, addrLen) < 0 {
-            self.log.error("Failed to bind socket to \(path)")
-            return false
-        }
-        self.log.debug("Successfully bound socket to \(path)")
-        return true
-    }
-
-    /// Listens for incoming connections on the socket.
-    static func listen(on fd: Int32) {
-        if Darwin.listen(fd, 1) < 0 {
-            self.log.error("Failed to listen on FD \(fd), errno=\(errno)")
-        } else {
-            self.log.debug("Listening on FD \(fd)")
-        }
-    }
-
-    /// Accepts a new connection on the given socket file descriptor.
-    static func acceptConnection(on fd: Int32) -> Int32 {
-        let clientFD = accept(fd, nil, nil)
-        if clientFD < 0 {
-            self.log.error("Failed to accept connection on FD \(fd), errno=\(errno)")
-        } else {
-            self.log.debug("Accepted new connection with FD \(clientFD) on socket FD \(fd)")
-        }
-        return clientFD
-    }
-}
-
-/// A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
-/// It sets up a Unix Domain Socket server to listen for Discord IPC connections.
+/**
+ A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
+ It sets up a Unix Domain Socket server to listen for Discord IPC connections.
+ */
 class DiscordRPCBridge: NSObject {
-    private let log = Logger(
+    private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
         category: "discordRPCBridge"
     )
@@ -103,31 +31,36 @@ class DiscordRPCBridge: NSObject {
 
     // MARK: - Initialization
 
+    /// Initializes the DiscordRPCBridge with the base path for Unix Domain Sockets.
     override init() {
         self.basePath = ProcessInfo.processInfo.environment["XDG_RUNTIME_DIR"]
-            ?? ProcessInfo.processInfo.environment["TMPDIR"]
-            ?? "/tmp/"
+        ?? ProcessInfo.processInfo.environment["TMPDIR"]
+        ?? "/tmp/"
         super.init()
     }
 
     // MARK: - Public Methods
 
-    /// Starts the IPC server and sets up the bridge for the given WKWebView.
-    /// - Parameter webView: The WKWebView instance to bridge with.
+    /**
+     Starts the IPC server and sets up the bridge for the given WKWebView.
+
+     - Parameter webView: The WKWebView instance to bridge with.
+     */
     func startBridge(for webView: WKWebView) {
         self.webView = webView
-        self.log.info("Starting DiscordRPCBridge")
+        self.logger.info("Starting DiscordRPCBridge")
         setupIPCServer()
     }
 
     // MARK: - IPC Server Setup
 
+    /// Sets up the IPC server by creating and binding Unix Domain Sockets.
     private func setupIPCServer() {
         DispatchQueue.global(qos: .background).async {
-            self.log.info("Setting up IPC servers")
-            for i in 0..<10 {
-                let socketPath = "\(self.basePath)discord-ipc-\(i)"
-                self.log.debug("Checking socket path: \(socketPath)")
+            self.logger.info("Setting up IPC servers")
+            for socketIndex in 0..<10 {
+                let socketPath = "\(self.basePath)discord-ipc-\(socketIndex)"
+                self.logger.debug("Checking socket path: \(socketPath)")
 
                 if self.isSocketInUse(at: socketPath) {
                     continue
@@ -135,645 +68,1191 @@ class DiscordRPCBridge: NSObject {
 
                 guard self.prepareSocket(at: socketPath) else { continue }
 
-                let fd = UnixDomainSocket.create(at: socketPath)
-                guard fd >= 0 else { continue }
+                let fileDescriptor = UnixDomainSocket.create(at: socketPath)
+                guard fileDescriptor >= 0 else { continue }
 
-                if UnixDomainSocket.bind(fd: fd, to: socketPath) {
-                    UnixDomainSocket.listen(on: fd)
-                    self.serverSockets.append(fd)
-                    self.acceptConnections(on: fd)
-                    self.log.info("IPC server listening on \(socketPath)")
-                    break
+                if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, to: socketPath) {
+                    UnixDomainSocket.listen(on: fileDescriptor)
+                    self.serverSockets.append(fileDescriptor)
+                    self.acceptConnections(on: fileDescriptor)
+                    self.logger.info("IPC server listening on \(socketPath)")
                 } else {
-                    close(fd)
+                    close(fileDescriptor)
                 }
             }
 
             if self.serverSockets.isEmpty {
-                self.log.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
+                self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
             }
         }
     }
 
-    /// Checks if the socket at the given path is already in use.
-    /// - Parameter path: The socket file path.
-    /// - Returns: `true` if the socket is in use, otherwise `false`.
+    /**
+     Checks if the socket at the given path is already in use.
+
+     - Parameter path: The socket file path.
+     - Returns: `true` if the socket is in use, otherwise `false`.
+     */
     private func isSocketInUse(at path: String) -> Bool {
         guard FileManager.default.fileExists(atPath: path) else { return false }
-        let testSocketFD = UnixDomainSocket.create(at: path)
-        defer { close(testSocketFD) }
+        let testSocketFileDescriptor = UnixDomainSocket.create(at: path)
+        defer { close(testSocketFileDescriptor) }
 
-        if testSocketFD < 0 { return true }
+        if testSocketFileDescriptor < 0 {
+            return true
+        }
 
-        let inUse = UnixDomainSocket.connect(fd: testSocketFD, to: path)
+        let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFileDescriptor, to: path)
         if inUse {
-            self.log.info("Socket \(path) is already in use")
+            self.logger.info("Socket \(path) is already in use")
         } else {
-            self.log.info("Socket \(path) is available")
+            self.logger.info("Socket \(path) is available")
         }
         return inUse
     }
 
-    /// Prepares the socket by removing existing file if necessary.
-    /// - Parameter path: The socket file path.
-    /// - Returns: `true` if preparation is successful, otherwise `false`.
+    /**
+     Prepares the socket by removing the existing file if necessary.
+
+     - Parameter path: The socket file path.
+     - Returns: `true` if preparation is successful, otherwise `false`.
+     */
     private func prepareSocket(at path: String) -> Bool {
         do {
             if FileManager.default.fileExists(atPath: path) {
                 try FileManager.default.removeItem(atPath: path)
-                self.log.info("Removed existing socket file at \(path)")
+                self.logger.info("Removed existing socket file at \(path)")
             }
             return true
         } catch {
-            self.log.error("Failed to remove socket file at \(path): \(error.localizedDescription)")
+            self.logger.error("Failed to remove socket file at \(path): \(error.localizedDescription)")
             return false
         }
     }
 
-    /// Accepts incoming connections on the given socket file descriptor.
-    /// - Parameter fd: The socket file descriptor.
-    private func acceptConnections(on fd: Int32) {
+    /**
+     Accepts incoming connections on the given socket file descriptor.
+
+     - Parameter fileDescriptor: The socket file descriptor.
+     */
+    private func acceptConnections(on fileDescriptor: Int32) {
         DispatchQueue.global(qos: .background).async {
-            self.log.info("Started accepting connections on FD \(fd)")
+            self.logger.info("Started accepting connections on FD \(fileDescriptor)")
             while true {
-                let clientFD = UnixDomainSocket.acceptConnection(on: fd)
-                guard clientFD >= 0 else { continue }
-                self.serverSockets.append(clientFD)
-                self.log.info("Accepted connection on FD \(clientFD)")
-                self.handleClient(clientFD)
+                let clientFileDescriptor = UnixDomainSocket.acceptConnection(on: fileDescriptor)
+                guard clientFileDescriptor >= 0 else { continue }
+                self.serverSockets.append(clientFileDescriptor)
+                self.logger.info("Accepted connection on FD \(clientFileDescriptor)")
+                self.handleClient(clientFileDescriptor)
             }
         }
     }
 
     // MARK: - Client Handling
 
-    /// Handles communication with the connected Discord client.
-    /// - Parameter fd: The client socket file descriptor.
-    private func handleClient(_ fd: Int32) {
-        self.log.debug("Handling client on FD \(fd)")
-        readLoop(fd: fd)
+    /**
+     Handles communication with the connected Discord client.
+
+     - Parameter fileDescriptor: The client socket file descriptor.
+     */
+    private func handleClient(_ fileDescriptor: Int32) {
+        self.logger.debug("Handling client on FD \(fileDescriptor)")
+        readLoop(fileDescriptor: fileDescriptor)
     }
 
-    /// Continuously reads and processes IPC messages from Discord.
-    /// - Parameter fd: The client socket file descriptor.
-    private func readLoop(fd: Int32) {
-        self.log.debug("Starting read loop on FD \(fd)")
+    /**
+     Continuously reads and processes IPC messages from Discord.
+
+     - Parameter fileDescriptor: The client socket file descriptor.
+     */
+    private func readLoop(fileDescriptor: Int32) {
+        self.logger.debug("Starting read loop on FD \(fileDescriptor)")
         let bufferSize = 65536
-        _ = Data(capacity: bufferSize)
 
         while true {
-            guard let message = readMessage(from: fd, bufferSize: bufferSize) else {
-                socketClose(fd: fd, code: .ratelimited, message: "Failed to read message")
+            guard let message = readMessage(from: fileDescriptor, bufferSize: bufferSize) else {
+                socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.ratelimited, message: "Failed to read message")
                 return
             }
-            handleIPCMessage(message, from: fd)
+            handleIPCMessage(message, from: fileDescriptor)
         }
     }
 
-    /// Reads a complete IPC message from the socket.
-    /// - Parameters:
-    ///   - fd: The socket file descriptor.
-    ///   - bufferSize: The maximum buffer size.
-    /// - Returns: An `IPCMessage` if successfully read, otherwise `nil`.
-    private func readMessage(from fd: Int32, bufferSize: Int) -> IPCMessage? {
-        var header = Data(count: 8)
-        guard readExact(fd: fd, into: &header, count: 8) else { return nil }
+    /**
+     Reads a complete IPC message from the socket.
 
-        let op = header.withUnsafeBytes { $0.load(as: Int32.self).littleEndian }
-        let length = header.withUnsafeBytes { $0.load(fromByteOffset: 4, as: Int32.self).littleEndian }
+     - Parameters:
+     - fileDescriptor: The socket file descriptor.
+     - bufferSize: The maximum buffer size.
+     - Returns: An `IPC.Message` if successfully read, otherwise `nil`.
+     */
+    private func readMessage(from fileDescriptor: Int32, bufferSize: Int) -> IPC.Message? {
+        guard let data = readExactData(from: fileDescriptor, count: 8) else { return nil }
+        let header = data
 
-        self.log.debug("Received packet - op: \(op), length: \(length) on FD \(fd)")
-
-        guard length > 0, length <= bufferSize - 8 else {
-            self.log.error("Invalid packet length: \(length) on FD \(fd)")
+        guard let operationCode = IPC.OperationCode(rawValue: Int32(littleEndian: header.withUnsafeBytes { $0.load(as: Int32.self) })) else {
+            self.logger.error("Invalid operation code received: \(header.map { String(format: "%02hhx", $0) }.joined())")
             return nil
         }
 
-        var payload = Data(count: Int(length))
-        guard readExact(fd: fd, into: &payload, count: Int(length)) else { return nil }
+        let length = Int32(littleEndian: header.withUnsafeBytes { $0.load(fromByteOffset: 4, as: Int32.self) })
 
-        // we're willing to deal with this force unwrap because at that point wtf is happening
-        return IPCMessage(operationCode: IPCOperationCode(rawValue: op)!, payload: payload.toDictionary() ?? [:])
+        self.logger.debug("Received packet - op: \(operationCode.rawValue), length: \(length) on FD \(fileDescriptor)")
+
+        guard length > 0, length <= bufferSize else {
+            self.logger.error("Invalid packet length: \(length) on FD \(fileDescriptor)")
+            return nil
+        }
+
+        guard let payloadData = readExactData(from: fileDescriptor, count: Int(length)) else { return nil }
+
+        self.logger.debug("Payload Data Length: \(payloadData.count) bytes")
+
+        // Optional: Log payload as string for debugging
+        if let payloadString = String(data: payloadData, encoding: .utf8) {
+            self.logger.debug("Payload Data: \(payloadString)")
+        } else {
+            self.logger.debug("Payload Data: Unable to convert to string")
+        }
+
+        let decoder = JSONDecoder()
+        let payload: IPC.MessagePayload
+
+        do {
+            payload = try decoder.decode(IPC.MessagePayload.self, from: payloadData)
+        } catch let DecodingError.dataCorrupted(context) {
+            self.logger.error("Decoding Error: Data corrupted - \(context.debugDescription) at \(context.codingPath)")
+            return nil
+        } catch let DecodingError.keyNotFound(key, context) {
+            self.logger.error("Decoding Error: Key '\(key.stringValue)' not found - \(context.debugDescription) at \(context.codingPath)")
+            return nil
+        } catch let DecodingError.typeMismatch(type, context) {
+            self.logger.error("Decoding Error: Type '\(type)' mismatch - \(context.debugDescription) at \(context.codingPath)")
+            return nil
+        } catch let DecodingError.valueNotFound(value, context) {
+            self.logger.error("Decoding Error: Value '\(value)' not found - \(context.debugDescription) at \(context.codingPath)")
+            return nil
+        } catch {
+            self.logger.error("Failed to decode IPC message on FD \(fileDescriptor): \(error.localizedDescription)")
+            return nil
+        }
+
+        return IPC.Message(operationCode: operationCode, payload: payload)
     }
 
-    /// Reads exactly `count` bytes from the socket into `data`.
-    /// - Parameters:
-    ///   - fd: The socket file descriptor.
-    ///   - data: The data buffer to fill.
-    ///   - count: The number of bytes to read.
-    /// - Returns: `true` if successfully read, otherwise `false`.
-    private func readExact(fd: Int32, into data: inout Data, count: Int) -> Bool {
+    /**
+     Reads exactly `count` bytes from the socket into `Data`.
+
+     - Parameters:
+     - fileDescriptor: The socket file descriptor.
+     - count: The number of bytes to read.
+     - Returns: `Data` if successfully read, otherwise `nil`.
+     */
+    private func readExactData(from fileDescriptor: Int32, count: Int) -> Data? {
         var totalBytesRead = 0
-        data = Data()
+        var data = Data()
 
         while totalBytesRead < count {
-            var tempBuffer = [UInt8](repeating: 0, count: count - totalBytesRead)
-            let bytesRead = read(fd, &tempBuffer, count - totalBytesRead)
+            var buffer = [UInt8](repeating: 0, count: count - totalBytesRead)
+            let bytesRead = read(fileDescriptor, &buffer, count - totalBytesRead)
 
             if bytesRead <= 0 {
-                self.log.error("Failed to read from FD \(fd)")
-                return false
+                self.logger.error("Failed to read from FD \(fileDescriptor)")
+                return nil
             }
 
             totalBytesRead += bytesRead
-            data.append(contentsOf: tempBuffer.prefix(bytesRead))
+            data.append(buffer, count: bytesRead)
         }
 
-        return true
+        return data
     }
 
-    /// Handles incoming IPC messages based on the operation code.
-    /// - Parameters:
-    ///   - message: The IPC message received.
-    ///   - fd: The client socket file descriptor.
-    private func handleIPCMessage(_ message: IPCMessage, from fd: Int32) {
+    /**
+     Handles incoming IPC messages based on the operation code.
+
+     - Parameters:
+     - message: The IPC message received.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handleIPCMessage(_ message: IPC.Message, from fileDescriptor: Int32) {
         switch message.operationCode {
         case .handshake:
-            handleHandshake(with: message.payload, from: fd)
+            handleHandshake(with: message.payload, from: fileDescriptor)
         case .frame:
-            handleFrame(with: message.payload, from: fd)
+            handleFrame(with: message.payload, from: fileDescriptor)
         case .close:
-            socketClose(fd: fd, code: .normal)
+            socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
         case .ping:
-            handlePing(with: message.payload, from: fd)
+            handlePing(with: message.payload, from: fileDescriptor)
         case .pong:
             fallthrough
         default:
-            self.log.warning("Unhandled operation code: \(message.operationCode.rawValue) on FD \(fd)")
+            self.logger.warning("Unhandled operation code: \(message.operationCode.rawValue) on FD \(fileDescriptor)")
         }
     }
 
-    /// Handles the HANDSHAKE operation.
-    /// - Parameters:
-    ///   - json: The JSON payload.
-    ///   - fd: The client socket file descriptor.
-    private func handleHandshake(with json: [String: Any], from fd: Int32) {
-        self.log.info("Handling HANDSHAKE on FD \(fd)")
+    /**
+     Handles the HANDSHAKE operation.
 
-        guard let version = json["v"] as? Int, version == 1 else {
-            self.log.error("Invalid or missing version in handshake on FD \(fd)")
-            socketClose(fd: fd, code: .invalidVersion)
+     - Parameters:
+     - payload: The IPC message payload.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handleHandshake(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+        self.logger.info("Handling HANDSHAKE on FD \(fileDescriptor)")
+
+        guard payload.v == 1 else {
+            self.logger.error("Invalid or missing version in handshake on FD \(fileDescriptor)")
+            socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidVersion)
             return
         }
 
-        guard let clientId = json["client_id"] as? String, !clientId.isEmpty else {
-            self.log.error("Empty or missing client_id in handshake on FD \(fd)")
-            socketClose(fd: fd, code: .invalidClientID)
+        guard let clientId = payload.client_id, !clientId.isEmpty else {
+            self.logger.error("Empty or missing client_id in handshake on FD \(fileDescriptor)")
+            socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidClientID)
             return
         }
 
-        clientIds[fd] = clientId
-        clientHandshakes[fd] = true
-        self.log.info("Handshake successful for client \(clientId) on FD \(fd)")
+        clientIds[fileDescriptor] = clientId
+        clientHandshakes[fileDescriptor] = true
+        self.logger.info("Handshake successful for client \(clientId) on FD \(fileDescriptor)")
 
-        let ackPayload: [String: Any] = [
-            "v": 1,
-            "client_id": clientId
-        ]
-        send(packet: ackPayload, op: 0, to: fd)
+        let acknowledgmentPayload = IPC.AckPayload(v: 1, client_id: clientId)
+        send(packet: acknowledgmentPayload, op: .handshake, to: fileDescriptor)
 
-        let readyPayload: [String: Any] = [
-            "cmd": "DISPATCH",
-            "data": [
-                "v": 1,
-                "config": [
-                    "cdn_host": "cdn.discordapp.com",
-                    "api_endpoint": "//discord.com/api",
-                    "environment": "production"
-                ],
-                "user": [
-                    "id": "1045800378228281345",
-                    "username": "arrpc",
-                    "discriminator": "0",
-                    "global_name": "arRPC",
-                    "avatar": "cfefa4d9839fb4bdf030f91c2a13e95c",
-                    "bot": false,
-                    "flags": 0
-                ]
-            ],
-            "evt": "READY",
-            "nonce": NSNull()
-        ]
-        send(packet: readyPayload, op: 1, to: fd)
+        let readyPayload = IPC.ReadyPayload(
+            cmd: "DISPATCH",
+            data: IPC.ReadyPayload.ReadyData(
+                v: 1,
+                config: IPC.ReadyPayload.ReadyConfig(
+                    cdn_host: "cdn.discordapp.com",
+                    api_endpoint: "//discord.com/api",
+                    environment: "production"
+                ),
+                user: IPC.ReadyPayload.User(
+                    id: "1045800378228281345",
+                    username: "arrpc",
+                    discriminator: "0",
+                    global_name: "arRPC",
+                    avatar: "cfefa4d9839fb4bdf030f91c2a13e95c",
+                    bot: false,
+                    flags: 0
+                )
+            ),
+            evt: "READY",
+            nonce: nil
+        )
+        send(packet: readyPayload, op: .frame, to: fileDescriptor)
     }
 
-    /// Handles the FRAME operation.
-    /// - Parameters:
-    ///   - json: The JSON payload.
-    ///   - fd: The client socket file descriptor.
-    private func handleFrame(with json: [String: Any], from fd: Int32) {
-        guard clientHandshakes[fd] == true else {
-            self.log.error("Received FRAME before handshake on FD \(fd)")
-            socketClose(fd: fd, code: .invalidClientID, message: "Need to handshake first")
+    /**
+     Handles the FRAME operation.
+
+     - Parameters:
+     - payload: The IPC message payload.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handleFrame(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+        guard clientHandshakes[fileDescriptor] == true else {
+            self.logger.error("Received FRAME before handshake on FD \(fileDescriptor)")
+            socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
             return
         }
 
-        guard let cmd = json["cmd"] as? String else {
-            self.log.error("Missing 'cmd' in FRAME on FD \(fd)")
+        guard let command = payload.cmd else {
+            self.logger.error("Missing 'cmd' in FRAME on FD \(fileDescriptor)")
             return
         }
 
-        self.log.info("Handling FRAME command: \(cmd) on FD \(fd)")
+        self.logger.info("Handling FRAME command: \(command) on FD \(fileDescriptor)")
 
-        switch cmd {
+        switch command {
         case "SET_ACTIVITY":
-            handleSetActivity(with: json, from: fd)
+            handleSetActivity(with: payload, from: fileDescriptor)
         case "INVITE_BROWSER", "GUILD_TEMPLATE_BROWSER":
-            handleInviteBrowser(with: json, cmd: cmd, from: fd)
+            handleInviteBrowser(with: payload.args, cmd: command, from: fileDescriptor)
         case "DEEP_LINK":
-            respondSuccess(to: fd, with: json)
+            respondSuccess(to: fileDescriptor, with: payload)
         case "CONNECTIONS_CALLBACK":
-            respondError(to: fd, cmd: cmd, code: "Unhandled", nonce: json["nonce"])
+            respondError(to: fileDescriptor, cmd: command, code: "Unhandled", nonce: payload.nonce)
         default:
-            self.log.warning("Unknown command: \(cmd) on FD \(fd)")
-            respondSuccess(to: fd, with: json)
+            self.logger.warning("Unknown command: \(command) on FD \(fileDescriptor)")
+            respondSuccess(to: fileDescriptor, with: payload)
         }
     }
 
-    /// Handles the SET_ACTIVITY command.
-    /// - Parameters:
-    ///   - json: The JSON payload.
-    ///   - fd: The client socket file descriptor.
-    private func handleSetActivity(with json: [String: Any], from fd: Int32) {
-        guard let args = json["args"] as? [String: Any],
-              let activity = args["activity"] as? [String: Any] else {
-            self.log.warning("Invalid SET_ACTIVITY arguments on FD \(fd)")
-            respondError(to: fd, cmd: "SET_ACTIVITY", code: "Invalid arguments", nonce: json["nonce"])
+    /**
+     Handles the SET_ACTIVITY command.
+
+     - Parameters:
+     - payload: The IPC message payload.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handleSetActivity(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+        guard let arguments = payload.args, var activity = arguments.activity else {
+            self.logger.warning("Invalid SET_ACTIVITY arguments or missing pid on FD \(fileDescriptor)")
+            respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Invalid arguments or missing pid", nonce: payload.nonce)
             return
         }
 
-        let pid = args["pid"] as? Int ?? 0
+        // 1. Copy application_id from handshake or use existing
+        if activity.applicationId == nil, let clientID = clientIds[fileDescriptor] {
+            activity.applicationId = clientID
+        }
 
+        // 2. Set the name based on application_id if it's still "Unknown Activity"
+        // Handled by asset fetching integration
+
+        // 3. Handle instance => flags
+        let isInstance = activity.instance ?? false
+        activity.flags = isInstance ? (1 << 0) : 0
+
+        // 4. Increment local counters and inject
         activitySocketCounter += 1
         let socketId = activitySocketCounter
+        clientActivity[fileDescriptor] = (arguments.pid, socketId)
 
-        clientActivity[fd] = (pid, socketId)
-
-        injectActivity(activity: activity, pid: pid, socketId: socketId)
-        respondSuccess(to: fd, with: json)
+        injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
+        respondSuccess(to: fileDescriptor, with: payload)
     }
 
-    /// Handles the INVITE_BROWSER and GUILD_TEMPLATE_BROWSER commands.
-    /// - Parameters:
-    ///   - json: The JSON payload.
-    ///   - cmd: The command string.
-    ///   - fd: The client socket file descriptor.
-    private func handleInviteBrowser(with json: [String: Any], cmd: String, from fd: Int32) {
-        guard let args = json["args"] as? [String: Any],
-              let code = args["code"] as? String else {
-            self.log.warning("Missing code for command \(cmd) on FD \(fd)")
-            respondSuccess(to: fd, with: json)
+    /**
+     Handles the INVITE_BROWSER and GUILD_TEMPLATE_BROWSER commands.
+
+     - Parameters:
+     - args: The command arguments.
+     - cmd: The command string.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handleInviteBrowser(with args: IPC.MessagePayload.CommandArgs?, cmd: String, from fileDescriptor: Int32) {
+        guard let arguments = args, let code = arguments.code else {
+            self.logger.warning("Missing code for command \(cmd) on FD \(fileDescriptor)")
+            respondError(to: fileDescriptor, cmd: cmd, code: "MissingCode", nonce: UUID().uuidString /* cannot use the same nonce! */)
             return
         }
-        self.log.info("Command \(cmd) with code: \(code) on FD \(fd)")
-        respondSuccess(to: fd, with: json)
+        self.logger.info("Command \(cmd) with code: \(code) on FD \(fileDescriptor)")
+        respondSuccess(to: fileDescriptor, with: IPC.MessagePayload(cmd: cmd, nonce: arguments.nonce, v: nil, client_id: nil, args: arguments))
     }
 
-    /// Handles the PING operation.
-    /// - Parameters:
-    ///   - json: The JSON payload.
-    ///   - fd: The client socket file descriptor.
-    private func handlePing(with json: [String: Any], from fd: Int32) {
-        self.log.info("Handling PING on FD \(fd)")
-        let payload: [String: Any] = ["nonce": json["nonce"] ?? NSNull()]
-        send(packet: payload, op: 4, to: fd)
-        let nonce = json["nonce"] != nil ? "with nonce: \(json["nonce"]!)" : "without nonce"
-        self.log.debug("Sent PONG \(nonce) on FD \(fd)")
+    /**
+     Handles the PING operation.
+
+     - Parameters:
+     - payload: The IPC message payload.
+     - fileDescriptor: The client socket file descriptor.
+     */
+    private func handlePing(with payload: IPC.MessagePayload, from fileDescriptor: Int32) {
+        self.logger.info("Handling PING on FD \(fileDescriptor)")
+        let pongPayload = IPC.PongPayload(nonce: payload.nonce)
+        send(packet: pongPayload, op: .pong, to: fileDescriptor)
     }
 
     // MARK: - Packet Handling
 
-    /// Sends a JSON packet to Discord over the given file descriptor.
-    /// - Parameters:
-    ///   - packet: The payload to send.
-    ///   - op: The operation code.
-    ///   - fd: The socket file descriptor.
-    private func send(packet: [String: Any], op: Int32, to fd: Int32) {
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: packet, options: []) else {
-            self.log.error("Failed to serialize payload to JSON")
+    /**
+     Sends a Codable JSON packet to Discord over the given file descriptor.
+
+     - Parameters:
+     - packet: The payload to send.
+     - operationCode: The operation code.
+     - fileDescriptor: The socket file descriptor.
+     */
+    private func send<T: Codable>(packet: T, op operationCode: IPC.OperationCode, to fileDescriptor: Int32) {
+        let encoder = JSONEncoder()
+        guard let jsonData = try? encoder.encode(packet) else {
+            self.logger.error("Failed to serialize payload to JSON")
             return
         }
-        var op = op
+
+        var operationCodeLittleEndian = operationCode.rawValue.littleEndian
+        var dataSizeLittleEndian = Int32(jsonData.count).littleEndian
         var buffer = Data()
-        buffer.append(Data(bytes: &op, count: 4).littleEndianData)
-        var dataSize = Int32(jsonData.count)
-        buffer.append(Data(bytes: &dataSize, count: 4).littleEndianData)
+        buffer.append(Data(bytes: &operationCodeLittleEndian, count: 4))
+        buffer.append(Data(bytes: &dataSizeLittleEndian, count: 4))
         buffer.append(jsonData)
 
-        write(fd: fd, data: buffer)
+        write(to: fileDescriptor, data: buffer)
     }
 
-    /// Sends data through the socket.
-    /// - Parameters:
-    ///   - fd: The socket file descriptor.
-    ///   - data: The data to send.
-    private func write(fd: Int32, data: Data) {
-        data.withUnsafeBytes { ptr in
-            let bytesWritten = unistd.write(fd, ptr.baseAddress, data.count)
+    /**
+     Sends data through the socket.
+
+     - Parameters:
+     - fileDescriptor: The socket file descriptor.
+     - data: The data to send.
+     */
+    private func write(to fileDescriptor: Int32, data: Data) {
+        data.withUnsafeBytes { pointer in
+            guard let baseAddress = pointer.baseAddress else {
+                self.logger.error("Failed to get base address of data")
+                return
+            }
+            let bytesWritten = Darwin.send(fileDescriptor, baseAddress, data.count, 0)
             if bytesWritten < 0 {
-                self.log.error("Failed to write to FD \(fd), errno=\(errno)")
+                self.logger.error("Failed to write to FD \(fileDescriptor), errno=\(errno)")
             } else {
-                self.log.debug("Wrote \(bytesWritten) bytes to FD \(fd)")
+                self.logger.debug("Wrote \(bytesWritten) bytes to FD \(fileDescriptor)")
             }
         }
     }
 
-    /// Responds with a success message to the client.
-    /// - Parameters:
-    ///   - fd: The client socket file descriptor.
-    ///   - json: The original request JSON.
-    private func respondSuccess(to fd: Int32, with json: [String: Any]) {
-        var response: [String: Any] = [
-            "evt": NSNull(),
-            "data": NSNull(),
-            "cmd": json["cmd"] ?? NSNull()
-        ]
-        if let nonce = json["nonce"] {
-            response["nonce"] = nonce
-        }
-        self.log.info("Responding with success: \(response)")
-        send(packet: response, op: 1, to: fd)
+    /**
+     Responds with a success message to the client.
+
+     - Parameters:
+     - fileDescriptor: The client socket file descriptor.
+     - payload: The original IPC message payload.
+     */
+    private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.MessagePayload) {
+        let response = IPC.SuccessResponse(
+            evt: nil,
+            data: nil,
+            cmd: payload.cmd,
+            nonce: payload.nonce
+        )
+        self.logger.info("Responding with success: \(String(describing: response))")
+        send(packet: response, op: .frame, to: fileDescriptor)
     }
 
-    /// Responds with an error message to the client.
-    /// - Parameters:
-    ///   - fd: The client socket file descriptor.
-    ///   - cmd: The command that caused the error.
-    ///   - code: The error code.
-    ///   - nonce: The nonce associated with the request.
-    private func respondError(to fd: Int32, cmd: String, code: String, nonce: Any?) {
-        let errorMsg: [String: Any] = [
-            "cmd": cmd,
-            "evt": "ERROR",
-            "data": [
-                "code": 4011,
-                "message": "Invalid invite or template id: \(code)"
-            ],
-            "nonce": nonce ?? NSNull()
-        ]
-        self.log.warning("Sending error response for cmd \(cmd) with code \(code) on FD \(fd)")
-        send(packet: errorMsg, op: 1, to: fd)
-    }
+    /**
+     Responds with an error message to the client.
 
-    private func respondError(to fd: Int32, cmd: String, code: IPCErrorCode, nonce: Any?) {
-        self.respondError(to: fd, cmd: cmd, code: "\(code.rawValue)", nonce: nonce)
+     - Parameters:
+     - fileDescriptor: The client socket file descriptor.
+     - cmd: The command that caused the error.
+     - code: The error code.
+     - nonce: The nonce associated with the request.
+     */
+    private func respondError(to fileDescriptor: Int32, cmd: String, code: String, nonce: String?) {
+        let errorMessage = IPC.ErrorResponse(
+            cmd: cmd,
+            evt: "ERROR",
+            data: IPC.ErrorResponse.ErrorData(code: 4011, message: "Invalid invite or template id: \(code)"),
+            nonce: nonce
+        )
+        self.logger.warning("Sending error response for cmd \(cmd) with code \(code) on FD \(fileDescriptor)")
+        send(packet: errorMessage, op: .frame, to: fileDescriptor)
     }
 
     // MARK: - Activity Injection
 
-    /// Injects the received activity data into the Discord web client via JavaScript.
-    /// - Parameters:
-    ///   - activity: The activity data.
-    ///   - pid: The process ID.
-    ///   - socketId: The socket ID.
-    private func injectActivity(activity: [String: Any], pid: Int, socketId: Int) {
-        guard let activityJSON = try? JSONSerialization.data(withJSONObject: activity, options: []),
+    /**
+     Injects the received activity data into the Discord web client via JavaScript.
+
+     - Parameters:
+     - activity: The activity data.
+     - pid: The process ID.
+     - socketId: The socket ID.
+     */
+    private func injectActivity(activity: DiscordRPCBridge.Activity, pid: Int, socketId: Int) {
+        guard let activityJSON = try? JSONEncoder().encode(activity),
               let activityString = String(data: activityJSON, encoding: .utf8),
               let webView = webView else {
-            self.log.error("Failed to serialize activity data or webView is nil")
+            self.logger.error("Failed to serialize activity data or webView is nil")
             return
         }
 
+        self.logger.debug("Injecting activity into Webview: \(activityString)")
+
         let injectionScript = """
-        (() => {
-            let Dispatcher;
-
-            if (!Dispatcher) {
-                let wpRequire;
-                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
-                window.webpackChunkdiscord_app.pop();
-
-                const modules = wpRequire.c;
-
-                for (const id in modules) {
-                    const mod = modules[id].exports;
-
-                    for (const prop in mod) {
-                        const candidate = mod[prop];
-                        try {
-                            if (candidate && candidate.register && candidate.wait) {
-                                Dispatcher = candidate;
-                                break;
+                (() => {
+                    let Dispatcher, lookupApp, lookupAsset;
+        
+                    // Initialize Webpack and Dispatcher
+                    if (!Dispatcher) {
+                        let wpRequire;
+                        window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
+                        window.webpackChunkdiscord_app.pop();
+        
+                        const modules = wpRequire.c;
+        
+                        for (const id in modules) {
+                            const mod = modules[id].exports;
+        
+                            for (const prop in mod) {
+                                const candidate = mod[prop];
+                                try {
+                                    if (candidate && candidate.register && candidate.wait) {
+                                        Dispatcher = candidate;
+                                        break;
+                                    }
+                                } catch {}
                             }
-                        } catch {}
+        
+                            if (Dispatcher) break;
+                        }
                     }
-
-                    if (Dispatcher) break;
-                }
-            }
-
-            console.info("Dispatcher found:", Dispatcher);
-
-            if (Dispatcher) {
-                try {
-                    Dispatcher.dispatch({ 
-                        type: 'LOCAL_ACTIVITY_UPDATE',
-                        activity: \(activityString),
-                        pid: \(pid),
-                        socketId: "\(socketId)"
-                    });
-                    console.info("Activity dispatched successfully");
-                } catch (e) {
-                    console.error("Dispatch error:", e);
-                }
-            }
-        })();
+        
+                    // Initialize lookupApp and lookupAsset
+                    if (!lookupApp || !lookupAsset) {
+                        const factories = wpRequire.m;
+        
+                        for (const id in factories) {
+                            if (factories[id].toString().includes('APPLICATION_RPC(')) {
+                                const mod = wpRequire(id);
+        
+                                // fetchApplicationsRPC
+                                const _lookupApp = Object.values(mod).find(e => {
+                                    if (typeof e !== 'function') return;
+                                    const str = e.toString();
+                                    return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
+                                });
+                                if (_lookupApp) {
+                                    lookupApp = async appId => {
+                                        let socket = {};
+                                        await _lookupApp(socket, appId);
+                                        return socket.application;
+                                    };
+                                }
+                            }
+        
+                            if (lookupApp) break;
+                        }
+        
+                        for (const id in factories) {
+                            if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
+                                const mod = wpRequire(id);
+        
+                                // fetchAssetIds
+                                const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
+                                if (_lookupAsset) {
+                                    lookupAsset = async (appId, name) => {
+                                        const result = await _lookupAsset(appId, [ name, undefined ]);
+                                        return result[0];
+                                    };
+                                }
+                            }
+        
+                            if (lookupAsset) break;
+                        }
+                    }
+        
+                    // Function to fetch application name
+                    const fetchAppName = async appId => {
+                        if (!lookupApp) {
+                            console.error("lookupApp function not found");
+                            return "Unknown Application";
+                        }
+                        try {
+                            const app = await lookupApp(appId);
+                            return app?.name || "Unknown Application";
+                        } catch (error) {
+                            console.error("Error fetching application name:", error);
+                            return "Unknown Application";
+                        }
+                    };
+        
+                    // Function to fetch asset image URL
+                    const fetchAssetImage = async (appId, imageName) => {
+                        if (!lookupAsset) {
+                            console.error("lookupAsset function not found");
+                            return imageName;
+                        }
+                        try {
+                            const assetUrl = await lookupAsset(appId, imageName);
+                            return assetUrl || imageName;
+                        } catch (error) {
+                            console.error("Error fetching asset image:", error);
+                            return imageName;
+                        }
+                    };
+        
+                    // Main function to process and dispatch activity
+                    const processAndDispatchActivity = async () => {
+                        if (!Dispatcher) {
+                            console.error("Dispatcher not found");
+                            return;
+                        }
+        
+                        const activity = \(activityString);
+        
+                        // Fetch application name
+                        if (activity.application_id) {
+                            activity.name = await fetchAppName(activity.application_id);
+                        }
+        
+                        // Fetch asset images
+                        if (activity.assets?.large_image) {
+                            activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
+                        }
+                        if (activity.assets?.small_image) {
+                            activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
+                        }
+        
+                        // Dispatch the updated activity
+                        try {
+                            Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
+                            console.info("Activity dispatched successfully:", activity);
+                        } catch (e) {
+                            console.error("Dispatch error:", e);
+                        }
+                    };
+        
+                    // Execute the main function
+                    processAndDispatchActivity();
+                })();
         """
 
-        webView.evaluateJavaScript(injectionScript) { _, error in
-            if let error = error {
-                self.log.error("Error injecting activity: \(error.localizedDescription)")
-            } else {
-                self.log.debug("Activity injected successfully")
+        DispatchQueue.main.async {
+            webView.evaluateJavaScript(injectionScript) { _, error in
+                if let error = error {
+                    self.logger.error("Error injecting activity: \(error.localizedDescription)")
+                } else {
+                    self.logger.debug("Activity injected successfully.")
+                }
             }
         }
     }
 
-    /// Injects JavaScript to clear the activity in the Discord web client.
-    /// - Parameters:
-    ///   - pid: The process ID.
-    ///   - socketId: The socket ID.
+    /**
+     Injects JavaScript to clear the activity in the Discord web client.
+
+     - Parameters:
+     - pid: The process ID.
+     - socketId: The socket ID.
+     */
     private func clearActivity(pid: Int, socketId: Int) {
         guard let webView = webView else { return }
 
         let clearScript = """
         (() => {
-            let Dispatcher;
-
-            if (!Dispatcher) {
-                let wpRequire;
-                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
+            let dispatcher;
+        
+            if (!dispatcher) {
+                let webpackRequire;
+                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => webpackRequire = x]);
                 window.webpackChunkdiscord_app.pop();
-
-                const modules = wpRequire.c;
-
-                for (const id in modules) {
-                    const mod = modules[id].exports;
-
-                    for (const prop in mod) {
-                        const candidate = mod[prop];
+        
+                const modules = webpackRequire.c;
+        
+                for (const moduleId in modules) {
+                    const module = modules[moduleId].exports;
+        
+                    for (const property in module) {
+                        const candidate = module[property];
                         try {
                             if (candidate && candidate.register && candidate.wait) {
-                                Dispatcher = candidate;
+                                dispatcher = candidate;
                                 break;
                             }
                         } catch {}
                     }
-
-                    if (Dispatcher) break;
+        
+                    if (dispatcher) break;
                 }
             }
-
-            console.info("Dispatcher found:", Dispatcher);
-
-            if (Dispatcher) {
+        
+            if (dispatcher) {
                 try {
-                    Dispatcher.dispatch({ 
+                    dispatcher.dispatch({ 
                         type: 'LOCAL_ACTIVITY_UPDATE',
                         activity: null,
                         pid: \(pid),
                         socketId: "\(socketId)"
                     });
                     console.info("Activity cleared successfully");
-                } catch (e) {
-                    console.error("Error clearing activity:", e);
+                } catch (error) {
+                    console.error("Error clearing activity:", error);
                 }
+            } else {
+                console.error("Dispatcher not found");
             }
         })();
         """
 
-        webView.evaluateJavaScript(clearScript) { _, error in
-            if let error = error {
-                self.log.error("Error clearing activity: \(error.localizedDescription)")
-            } else {
-                self.log.debug("Activity cleared successfully")
+        DispatchQueue.main.async {
+            webView.evaluateJavaScript(clearScript) { _, error in
+                if let error = error {
+                    self.logger.error("Error clearing activity: \(error.localizedDescription)")
+                } else {
+                    self.logger.debug("Activity cleared successfully")
+                }
             }
         }
     }
 
     // MARK: - Socket Management
 
-    /// Closes the socket and cleans up client state.
-    /// - Parameters:
-    ///   - fd: The client socket file descriptor.
-    ///   - code: The closure code.
-    ///   - message: The closure message.
-    private func socketClose(fd: Int32, code: Int = 1000, message: String = "") {
-        self.log.info("Closing socket on FD \(fd) with code \(code) and message: \(message)")
+    /**
+     Closes the socket and cleans up client state.
 
-        if let activity = clientActivity[fd] {
+     - Parameters:
+     - fileDescriptor: The client socket file descriptor.
+     - code: The closure code.
+     - message: The closure message.
+     */
+    private func socketClose(fileDescriptor: Int32, code: IPC.IPCError, message: String? = nil) {
+        self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
+
+        if let activity = clientActivity[fileDescriptor] {
             clearActivity(pid: activity.pid, socketId: activity.socketId)
-            clientActivity.removeValue(forKey: fd)
+            clientActivity.removeValue(forKey: fileDescriptor)
         }
 
-        let closePayload: [String: Any] = [
-            "code": code,
-            "message": message
-        ]
-        send(packet: closePayload, op: 2, to: fd)
+        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+        send(packet: closePayload, op: .close, to: fileDescriptor)
 
-        clientHandshakes.removeValue(forKey: fd)
-        clientIds.removeValue(forKey: fd)
-        serverSockets.removeAll { $0 == fd }
+        clientHandshakes.removeValue(forKey: fileDescriptor)
+        clientIds.removeValue(forKey: fileDescriptor)
+        serverSockets.removeAll { $0 == fileDescriptor }
 
-        close(fd)
-        self.log.info("Socket closed on FD \(fd)")
-    }
-
-    private func socketClose(fd: Int32, code: IPCCloseCode, message: String? = nil) {
-        socketClose(fd: fd, code: code.rawValue, message: message ?? "\(code.description) closure")
-    }
-
-    private func socketClose(fd: Int32, code: IPCErrorCode, message: String? = nil) {
-        socketClose(fd: fd, code: code.rawValue, message: message ?? "\(code.description)")
+        close(fileDescriptor)
+        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
 }
+
+// MARK: - IPC Structures
 
 extension DiscordRPCBridge {
-    /// Represents an IPC message with operation code and payload.
-    struct IPCMessage {
-        let operationCode: IPCOperationCode
-        let payload: [String: Any]
-    }
+    /**
+     Namespace for IPC related structures and enums.
+     */
+    struct IPC {
+        /**
+         Protocol defining IPC errors with raw values and descriptions.
+         */
+        protocol IPCError {
+            var rawValue: Int { get }
+            var description: String { get }
+        }
 
-    enum IPCOperationCode: Int32 {
-        case handshake = 0
-        case frame = 1
-        case close = 2
-        case ping = 3
-        case pong = 4
+        /// Represents an IPC message with operation code and payload.
+        struct Message: Codable {
+            let operationCode: OperationCode
+            let payload: MessagePayload
+        }
 
-        var description: String {
-            switch self {
-            case .handshake:
-                return "Handshake"
-            case .frame:
-                return "Frame"
-            case .close:
-                return "Close"
-            case .ping:
-                return "Ping"
-            case .pong:
-                return "Pong"
+        /**
+         Structure representing the payload of an IPC message.
+         */
+        struct MessagePayload: Codable {
+            let cmd: String?
+            let nonce: String?
+            let v: Int?
+            let client_id: String?
+            let args: CommandArgs?
+
+            enum CodingKeys: String, CodingKey {
+                case cmd, nonce, v, client_id, args
+            }
+
+            init(cmd: String?, nonce: String?, v: Int?, client_id: String?, args: CommandArgs?) {
+                self.cmd = cmd
+                self.nonce = nonce
+                self.v = v
+                self.client_id = client_id
+                self.args = args
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.cmd = try container.decodeIfPresent(String.self, forKey: .cmd)
+                self.nonce = try container.decodeIfPresent(String.self, forKey: .nonce)
+
+                // Handle different types for 'v'
+                if let intValue = try? container.decode(Int.self, forKey: .v) {
+                    self.v = intValue
+                } else if let stringValue = try? container.decode(String.self, forKey: .v),
+                          let intValue = Int(stringValue) {
+                    self.v = intValue
+                } else {
+                    self.v = nil
+                }
+
+                self.client_id = try container.decodeIfPresent(String.self, forKey: .client_id)
+                self.args = try container.decodeIfPresent(CommandArgs.self, forKey: .args)
+            }
+
+            /**
+             Structure representing command arguments within the payload.
+             */
+            struct CommandArgs: Codable {
+                let pid: Int
+                let activity: Activity?
+                let code: String?
+                let nonce: String?
+            }
+        }
+
+        /**
+         Structure representing an acknowledgment payload.
+         */
+        struct AckPayload: Codable {
+            let v: Int
+            let client_id: String
+        }
+
+        /**
+         Structure representing a ready payload.
+         */
+        struct ReadyPayload: Codable {
+            let cmd: String
+            let data: ReadyData
+            let evt: String
+            let nonce: String?
+
+            struct ReadyData: Codable {
+                let v: Int
+                let config: ReadyConfig
+                let user: User
+            }
+
+            struct ReadyConfig: Codable {
+                let cdn_host: String
+                let api_endpoint: String
+                let environment: String
+            }
+
+            struct User: Codable {
+                let id: String
+                let username: String
+                let discriminator: String
+                let global_name: String
+                let avatar: String
+                let bot: Bool
+                let flags: Int
+            }
+        }
+
+        /**
+         Structure representing a pong payload.
+         */
+        struct PongPayload: Codable {
+            let nonce: String?
+        }
+
+        /**
+         Structure representing a successful response.
+         */
+        struct SuccessResponse: Codable {
+            let evt: String?
+            let data: String?
+            let cmd: String?
+            let nonce: String?
+        }
+
+        /**
+         Structure representing an error response.
+         */
+        struct ErrorResponse: Codable {
+            let cmd: String
+            let evt: String
+            let data: ErrorData
+            let nonce: String?
+
+            struct ErrorData: Codable {
+                let code: Int
+                let message: String
+            }
+        }
+
+        /**
+         Structure representing a close payload.
+         */
+        struct ClosePayload: Codable {
+            let code: Int
+            let message: String
+        }
+
+        /**
+         Enum representing operation codes for IPC.
+         */
+        enum OperationCode: Int32, Codable {
+            case handshake = 0
+            case frame = 1
+            case close = 2
+            case ping = 3
+            case pong = 4
+
+            var description: String {
+                switch self {
+                case .handshake:
+                    return "Handshake"
+                case .frame:
+                    return "Frame"
+                case .close:
+                    return "Close"
+                case .ping:
+                    return "Ping"
+                case .pong:
+                    return "Pong"
+                }
+            }
+        }
+
+        /**
+         Enum representing closure codes for IPC.
+         */
+        enum ClosureCode: Int, IPCError {
+            case normal = 1000
+            case unsupported = 1003
+            case abnormal = 1006
+
+            var description: String {
+                switch self {
+                case .normal:
+                    return "Normal"
+                case .unsupported:
+                    return "Unsupported"
+                case .abnormal:
+                    return "Abnormal"
+                }
+            }
+        }
+
+        /**
+         Enum representing error codes for IPC.
+         */
+        enum ErrorCode: Int, IPCError {
+            case invalidClientID = 4000
+            case invalidOrigin = 4001
+            case ratelimited = 4002
+            case tokenRevoked = 4003
+            case invalidVersion = 4004
+            case invalidEncoding = 4005
+
+            var description: String {
+                switch self {
+                case .invalidClientID:
+                    return "Invalid Client ID"
+                case .invalidOrigin:
+                    return "Invalid Origin"
+                case .ratelimited:
+                    return "Rate Limited"
+                case .tokenRevoked:
+                    return "Token Revoked"
+                case .invalidVersion:
+                    return "Invalid Version"
+                case .invalidEncoding:
+                    return "Invalid Encoding"
+                }
             }
         }
     }
 
-    enum IPCCloseCode: Int {
-        case normal = 1000
-        case unsupported = 1003
-        case abnormal = 1006
+    // MARK: - Activity Struct
 
-        var description: String {
-            switch self {
-            case .normal:
-                return "Normal"
-            case .unsupported:
-                return "Unsupported"
-            case .abnormal:
-                return "Abnormal"
+    /**
+     Structure representing an activity.
+     */
+    struct Activity: Codable {
+        var name: String
+        let type: Int
+        let url: String?
+        let createdAt: Int
+        var timestamps: Timestamps?
+        var applicationId: String?
+        var details: String?
+        var state: String?
+        var emoji: Emoji?
+        var party: Party?
+        var assets: Assets?
+        var buttons: [Button]?
+        var secrets: Secrets?
+        var instance: Bool?
+        var flags: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case name, type, url, createdAt = "created_at", timestamps, applicationId = "application_id", details, state, emoji, party, assets, buttons, secrets, instance, flags
+        }
+
+        /**
+         Custom initializer to handle missing keys gracefully.
+         */
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+
+            // Non-optionals
+            self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Unknown Activity"
+            self.type = try container.decodeIfPresent(Int.self, forKey: .type) ?? 0
+            self.createdAt = try container.decodeIfPresent(Int.self, forKey: .createdAt) ?? Int(Date().timeIntervalSince1970)
+
+            // Optionals
+            self.url = try container.decodeIfPresent(String.self, forKey: .url)
+            self.timestamps = try container.decodeIfPresent(Timestamps.self, forKey: .timestamps)
+            self.applicationId = try container.decodeIfPresent(String.self, forKey: .applicationId)
+            self.details = try container.decodeIfPresent(String.self, forKey: .details)
+            self.state = try container.decodeIfPresent(String.self, forKey: .state)
+            self.emoji = try container.decodeIfPresent(Emoji.self, forKey: .emoji)
+            self.party = try container.decodeIfPresent(Party.self, forKey: .party)
+            self.assets = try container.decodeIfPresent(Assets.self, forKey: .assets)
+            self.buttons = try container.decodeIfPresent([Button].self, forKey: .buttons)
+            self.secrets = try container.decodeIfPresent(Secrets.self, forKey: .secrets)
+            self.instance = try container.decodeIfPresent(Bool.self, forKey: .instance)
+            self.flags = try container.decodeIfPresent(Int.self, forKey: .flags)
+        }
+
+        // Nested Structures
+
+        /**
+         Structure representing timestamps within an activity.
+         */
+        struct Timestamps: Codable {
+            var start: Int?
+            var end: Int?
+        }
+
+        /**
+         Structure representing an emoji within an activity.
+         */
+        struct Emoji: Codable {
+            let name: String?
+            let id: String?
+            let animated: Bool?
+        }
+
+        /**
+         Structure representing a party within an activity.
+         */
+        struct Party: Codable {
+            let id: String?
+            let size: [Int]?
+        }
+
+        /**
+         Structure representing assets within an activity.
+         */
+        struct Assets: Codable {
+            let largeImage: String?
+            let largeText: String?
+            let smallImage: String?
+            let smallText: String?
+
+            enum CodingKeys: String, CodingKey {
+                case largeImage = "large_image"
+                case largeText = "large_text"
+                case smallImage = "small_image"
+                case smallText = "small_text"
             }
+        }
+
+        /**
+         Structure representing a button within an activity.
+         */
+        struct Button: Codable {
+            let label: String
+            let url: String
+        }
+
+        /**
+         Structure representing secrets within an activity.
+         */
+        struct Secrets: Codable {
+            let join: String?
+            let spectate: String?
+            let match: String?
         }
     }
 
-    enum IPCErrorCode: Int {
-        case invalidClientID = 4000
-        case invalidOrigin = 4001
-        case ratelimited = 4002
-        case tokenRevoked = 4003
-        case invalidVersion = 4004
-        case invalidEncoding = 4005
+    /**
+     Structure handling Unix Domain Socket operations.
+     */
+    struct UnixDomainSocket {
+        private static let logger = Logger(
+            subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
+            category: "unixDomainSocket"
+        )
 
-        var description: String {
-            switch self {
-            case .invalidClientID:
-                return "Invalid Client ID"
-            case .invalidOrigin:
-                return "Invalid Origin"
-            case .ratelimited:
-                return "Rate Limited"
-            case .tokenRevoked:
-                return "Token Revoked"
-            case .invalidVersion:
-                return "Invalid Version"
-            case .invalidEncoding:
-                return "Invalid Encoding"
+        /**
+         Creates a Unix Domain Socket at the specified path.
+
+         - Parameter path: The socket file path.
+         - Returns: The file descriptor of the created socket, or a negative value on failure.
+         */
+        static func create(at path: String) -> Int32 {
+            let fileDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+            if fileDescriptor < 0 {
+                self.logger.error("Failed to create socket at \(path)")
+            } else {
+                self.logger.debug("Created socket with FD \(fileDescriptor) at \(path)")
+                // Prevent SIGPIPE from terminating the process
+                var set: Int32 = 1
+                if setsockopt(fileDescriptor, SOL_SOCKET, SO_NOSIGPIPE, &set, socklen_t(MemoryLayout<Int32>.size)) == -1 {
+                    self.logger.error("Failed to set SO_NOSIGPIPE on socket \(fileDescriptor)")
+                } else {
+                    self.logger.debug("SO_NOSIGPIPE set on socket \(fileDescriptor)")
+                }
+            }
+            return fileDescriptor
+        }
+
+        /**
+         Connects to a Unix Domain Socket at the specified path.
+
+         - Parameters:
+         - fileDescriptor: The socket file descriptor.
+         - path: The socket file path.
+         - Returns: `true` if the connection is successful, otherwise `false`.
+         */
+        static func connect(fileDescriptor: Int32, to path: String) -> Bool {
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            strncpy(&address.sun_path.0, path, MemoryLayout.size(ofValue: address.sun_path) - 1)
+            let addressLength = socklen_t(MemoryLayout<sockaddr_un>.size)
+
+            if Darwin.connect(fileDescriptor, withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
+            }, addressLength) < 0 {
+                self.logger.error("Failed to connect to socket at \(path)")
+                return false
+            }
+            self.logger.debug("Successfully connected to socket at \(path)")
+            close(fileDescriptor)
+            return true
+        }
+
+        /**
+         Binds the socket to the specified path.
+
+         - Parameters:
+         - fileDescriptor: The socket file descriptor.
+         - path: The socket file path.
+         - Returns: `true` if binding is successful, otherwise `false`.
+         */
+        static func bind(fileDescriptor: Int32, to path: String) -> Bool {
+            var address = sockaddr_un()
+            address.sun_family = sa_family_t(AF_UNIX)
+            strncpy(&address.sun_path.0, path, MemoryLayout.size(ofValue: address.sun_path) - 1)
+            let addressLength = socklen_t(MemoryLayout<sockaddr_un>.size)
+
+            if Darwin.bind(fileDescriptor, withUnsafePointer(to: &address) {
+                $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { $0 }
+            }, addressLength) < 0 {
+                self.logger.error("Failed to bind socket to \(path)")
+                return false
+            }
+            self.logger.debug("Successfully bound socket to \(path)")
+            return true
+        }
+
+        /**
+         Listens for incoming connections on the socket.
+
+         - Parameter fileDescriptor: The socket file descriptor.
+         */
+        static func listen(on fileDescriptor: Int32) {
+            if Darwin.listen(fileDescriptor, 1) < 0 {
+                self.logger.error("Failed to listen on FD \(fileDescriptor), errno=\(errno)")
+            } else {
+                self.logger.debug("Listening on FD \(fileDescriptor)")
             }
         }
-    }
-}
 
-// MARK: - Data Extension
+        /**
+         Accepts a new connection on the given socket file descriptor.
 
-extension Data {
-    /// Converts Data to a Dictionary.
-    func toDictionary() -> [String: Any]? {
-        try? JSONSerialization.jsonObject(with: self, options: []) as? [String: Any]
-    }
-
-    /// Returns little endian data.
-    var littleEndianData: Data {
-        var le = self
-        return Data(bytes: &le, count: self.count)
+         - Parameter fileDescriptor: The socket file descriptor.
+         - Returns: The file descriptor of the accepted connection, or a negative value on failure.
+         */
+        static func acceptConnection(on fileDescriptor: Int32) -> Int32 {
+            let clientFileDescriptor = accept(fileDescriptor, nil, nil)
+            if clientFileDescriptor < 0 {
+                self.logger.error("Failed to accept connection on FD \(fileDescriptor), errno=\(errno)")
+            } else {
+                self.logger.debug("Accepted new connection with FD \(clientFileDescriptor) on socket FD \(fileDescriptor)")
+            }
+            return clientFileDescriptor
+        }
     }
 }
