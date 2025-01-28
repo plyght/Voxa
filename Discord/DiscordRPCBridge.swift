@@ -27,8 +27,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
     private var activitySocketCounter: Int = 0
     private var clientActivity: [Int32: (pid: Int, socketId: Int)] = [:]
 
+    static let shared = DiscordRPCBridge()
+
     /// Initializes the DiscordRPCBridge with the base path for Unix Domain Sockets.
-    override init() {
+    private override init() {
         super.init()
     }
 
@@ -52,17 +54,15 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         DispatchQueue.global(qos: .background).async {
             self.logger.info("Setting up IPC servers")
             guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
-                self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go😂😂😂 no rpc")
+                self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go 😂😂😂 no rpc")
                 return
             }
 
+            var bound = false
+
             for socketIndex in 0..<10 {
                 let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
-                self.logger.debug("Checking socket path: \(socketPath)")
-
-                if self.isSocketInUse(at: socketPath) {
-                    continue
-                }
+                self.logger.debug("Attempting to bind to socket path: \(socketPath)")
 
                 guard self.prepareSocket(at: socketPath) else { continue }
 
@@ -73,13 +73,16 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                     UnixDomainSocket.listen(on: fileDescriptor)
                     self.serverSockets.append(fileDescriptor)
                     self.acceptConnections(on: fileDescriptor)
-                    self.logger.info("IPC server listening on \(socketPath)")
+                    self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
+                    bound = true
+                    break
                 } else {
                     close(fileDescriptor)
+                    self.logger.warning("Failed to bind to socket path: \(socketPath). Trying next socket.")
                 }
             }
 
-            if self.serverSockets.isEmpty {
+            if !bound {
                 self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
             }
         }
@@ -387,31 +390,31 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-        private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+    private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         guard let arguments = payload.args else {
             self.logger.warning("Missing arguments for SET_ACTIVITY on FD \(fileDescriptor)")
             respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
             return
         }
-        
+
         if var activity = arguments.activity {
             // 1. Copy application_id from handshake or use existing
             if activity.applicationId == nil, let clientID = clientIds[fileDescriptor] {
                 activity.applicationId = clientID
             }
-    
+
             // 2. Set the name based on application_id if it's still "Unknown Activity"
             // Handled by asset fetching integration
-    
+
             // 3. Handle instance => flags
             let isInstance = activity.instance ?? false
             activity.flags = isInstance ? (1 << 0) : 0
-    
+
             // 4. Increment local counters and inject
             activitySocketCounter += 1
             let socketId = activitySocketCounter
             clientActivity[fileDescriptor] = (arguments.pid, socketId)
-    
+
             injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
             respondSuccess(to: fileDescriptor, with: payload)
         } else {

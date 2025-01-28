@@ -250,8 +250,6 @@ struct WebView: NSViewRepresentable {
     var initialURL: String
     @Binding var webViewReference: WKWebView?
 
-    private let discordRPCBridge = DiscordRPCBridge()
-
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: String) {
         self.channelClickWidth = channelClickWidth
@@ -479,8 +477,7 @@ struct WebView: NSViewRepresentable {
             )
         )
 
-        // Start our new Swift-based “arRPC” bridging approach:
-        discordRPCBridge.startBridge(for: webView)
+        DiscordRPCBridge.shared.startBridge(for: webView)
 
         loadPluginsAndCSS(webView: webView)
         loadInitialURL(webView: webView) // TODO: swiftUI view err instead
