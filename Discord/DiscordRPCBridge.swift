@@ -23,7 +23,6 @@ class DiscordRPCBridge: NSObject {
 
     private weak var webView: WKWebView?
     private var serverSockets: [Int32] = []
-    private let basePath: String
     private var clientHandshakes: [Int32: Bool] = [:]
     private var clientIds: [Int32: String] = [:]
     private var activitySocketCounter: Int = 0
@@ -33,9 +32,6 @@ class DiscordRPCBridge: NSObject {
 
     /// Initializes the DiscordRPCBridge with the base path for Unix Domain Sockets.
     override init() {
-        self.basePath = ProcessInfo.processInfo.environment["XDG_RUNTIME_DIR"]
-        ?? ProcessInfo.processInfo.environment["TMPDIR"]
-        ?? "/tmp/"
         super.init()
     }
 
@@ -58,8 +54,13 @@ class DiscordRPCBridge: NSObject {
     private func setupIPCServer() {
         DispatchQueue.global(qos: .background).async {
             self.logger.info("Setting up IPC servers")
+            guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
+                self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go😂😂😂 no rpc")
+                return
+            }
+
             for socketIndex in 0..<10 {
-                let socketPath = "\(self.basePath)discord-ipc-\(socketIndex)"
+                let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
                 self.logger.debug("Checking socket path: \(socketPath)")
 
                 if self.isSocketInUse(at: socketPath) {
