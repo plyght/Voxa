@@ -806,13 +806,9 @@ class DiscordRPCBridge: NSObject {
 // MARK: - IPC Structures
 
 extension DiscordRPCBridge {
-    /**
-     Namespace for IPC related structures and enums.
-     */
+    /// Namespace for IPC related structures and enums.
     struct IPC {
-        /**
-         Protocol defining IPC errors with raw values and descriptions.
-         */
+        /// Protocol defining IPC errors with raw values and descriptions.
         protocol IPCError {
             var rawValue: Int { get }
             var description: String { get }
@@ -824,9 +820,7 @@ extension DiscordRPCBridge {
             let payload: MessagePayload
         }
 
-        /**
-         Structure representing the payload of an IPC message.
-         */
+        /// Structure representing the payload of an IPC message.
         struct MessagePayload: Codable {
             let cmd: String?
             let nonce: String?
@@ -865,9 +859,7 @@ extension DiscordRPCBridge {
                 self.args = try container.decodeIfPresent(CommandArgs.self, forKey: .args)
             }
 
-            /**
-             Structure representing command arguments within the payload.
-             */
+            /// Structure representing command arguments within the payload.
             struct CommandArgs: Codable {
                 let pid: Int
                 let activity: Activity?
@@ -876,17 +868,13 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Structure representing an acknowledgment payload.
-         */
+        /// Structure representing an acknowledgment payload.
         struct AckPayload: Codable {
             let v: Int
             let client_id: String
         }
 
-        /**
-         Structure representing a ready payload.
-         */
+        /// Structure representing a ready payload.
         struct ReadyPayload: Codable {
             let cmd: String
             let data: ReadyData
@@ -916,16 +904,12 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Structure representing a pong payload.
-         */
+        /// Structure representing a pong payload.
         struct PongPayload: Codable {
             let nonce: String?
         }
 
-        /**
-         Structure representing a successful response.
-         */
+        /// Structure representing a successful response.
         struct SuccessResponse: Codable {
             let evt: String?
             let data: String?
@@ -933,9 +917,7 @@ extension DiscordRPCBridge {
             let nonce: String?
         }
 
-        /**
-         Structure representing an error response.
-         */
+        /// Structure representing an error response.
         struct ErrorResponse: Codable {
             let cmd: String
             let evt: String
@@ -948,17 +930,13 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Structure representing a close payload.
-         */
+        /// Structure representing a close payload.
         struct ClosePayload: Codable {
             let code: Int
             let message: String
         }
 
-        /**
-         Enum representing operation codes for IPC.
-         */
+        /// Enum representing operation codes for IPC.
         enum OperationCode: Int32, Codable {
             case handshake = 0
             case frame = 1
@@ -982,9 +960,7 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Enum representing closure codes for IPC.
-         */
+        /// Enum representing closure codes for IPC.
         enum ClosureCode: Int, IPCError {
             case normal = 1000
             case unsupported = 1003
@@ -1002,9 +978,7 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Enum representing error codes for IPC.
-         */
+        /// Enum representing error codes for IPC.
         enum ErrorCode: Int, IPCError {
             case invalidClientID = 4000
             case invalidOrigin = 4001
@@ -1034,9 +1008,7 @@ extension DiscordRPCBridge {
 
     // MARK: - Activity Struct
 
-    /**
-     Structure representing an activity.
-     */
+    /// Structure representing an activity.
     struct Activity: Codable {
         var name: String
         let type: Int
@@ -1058,9 +1030,7 @@ extension DiscordRPCBridge {
             case name, type, url, createdAt = "created_at", timestamps, applicationId = "application_id", details, state, emoji, party, assets, buttons, secrets, instance, flags
         }
 
-        /**
-         Custom initializer to handle missing keys gracefully.
-         */
+        /// Custom initializer to handle missing keys gracefully.
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -1086,34 +1056,26 @@ extension DiscordRPCBridge {
 
         // Nested Structures
 
-        /**
-         Structure representing timestamps within an activity.
-         */
+        /// Structure representing timestamps within an activity.
         struct Timestamps: Codable {
             var start: Int?
             var end: Int?
         }
 
-        /**
-         Structure representing an emoji within an activity.
-         */
+        /// Structure representing an emoji within an activity.
         struct Emoji: Codable {
             let name: String?
             let id: String?
             let animated: Bool?
         }
 
-        /**
-         Structure representing a party within an activity.
-         */
+        /// Structure representing a party within an activity.
         struct Party: Codable {
             let id: String?
             let size: [Int]?
         }
 
-        /**
-         Structure representing assets within an activity.
-         */
+        /// Structure representing assets within an activity.
         struct Assets: Codable {
             let largeImage: String?
             let largeText: String?
@@ -1128,17 +1090,13 @@ extension DiscordRPCBridge {
             }
         }
 
-        /**
-         Structure representing a button within an activity.
-         */
+        /// Structure representing a button within an activity.
         struct Button: Codable {
             let label: String
             let url: String
         }
 
-        /**
-         Structure representing secrets within an activity.
-         */
+        /// Structure representing secrets within an activity./
         struct Secrets: Codable {
             let join: String?
             let spectate: String?
@@ -1146,9 +1104,7 @@ extension DiscordRPCBridge {
         }
     }
 
-    /**
-     Structure handling Unix Domain Socket operations.
-     */
+    /// Structure handling Unix Domain Socket operations.
     struct UnixDomainSocket {
         private static let logger = Logger(
             subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
