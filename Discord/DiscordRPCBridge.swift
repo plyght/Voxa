@@ -13,6 +13,7 @@ import SwiftUI
 /**
  A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
  It sets up a Unix Domain Socket server to listen for Discord IPC connections.
+ Thank you @vapidinfinity 🙏🏾
  */
 class DiscordRPCBridge: NSObject {
     private let logger = Logger(
@@ -25,15 +26,14 @@ class DiscordRPCBridge: NSObject {
     private var serverSockets = Set<Int32>()
     private var clientSockets = Set<Int32>()
 
-    private var nextSocketId = 1
+    private var nextSocketID = 1
     private var clients = [Int32: Client]()
     private class Client {
         let fileDescriptor: Int32
         var isAcknowledged: Bool = false
         var clientID: String?
-        var socketId: Int?
-        var pid: Int = 0
-        var activity: (pid: Int, socketId: Int)?
+        var socketID: Int?
+        var processID: Int?
 
         init(fileDescriptor: Int32) {
             self.fileDescriptor = fileDescriptor
@@ -354,8 +354,8 @@ class DiscordRPCBridge: NSObject {
         client.isAcknowledged = true
         self.logger.info("Handshake successful for client \(clientID) on FD \(fileDescriptor) 👍🏾")
 
-        client.socketId = self.nextSocketId
-        self.nextSocketId += 1
+        client.socketID = self.nextSocketID
+        self.nextSocketID += 1
 
         let acknowledgmentPayload = IPC.AcknowledgementPayload(version: 1, clientID: clientID)
         send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
@@ -445,16 +445,16 @@ class DiscordRPCBridge: NSObject {
 
             updatedActivity.flags = updatedActivity.instance == true ? 1 << 0 : 0
 
-            guard let socketId = client.socketId else {
-                self.logger.error("No socketId found for FD \(fileDescriptor)")
-                self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketId", nonce: payload.nonce)
+            guard let socketID = client.socketID else {
+                self.logger.error("No socketID found for FD \(fileDescriptor)")
+                self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketID", nonce: payload.nonce)
                 return
             }
 
-            client.pid = arguments.pid
-            client.socketId = socketId
+            client.processID = arguments.processID
+            client.socketID = socketID
 
-            self.injectActivity(activity: updatedActivity, pid: arguments.pid, socketId: socketId)
+            self.injectActivity(activity: updatedActivity, processID: arguments.processID, socketID: socketID)
             self.respondSuccess(to: fileDescriptor, with: payload)
         }
     }
@@ -588,10 +588,10 @@ class DiscordRPCBridge: NSObject {
 
      - Parameters:
        - activity: The activity data.
-       - pid: The process ID.
-       - socketId: The socket ID.
+       - processID: The process ID.
+       - socketID: The socket ID.
      */
-    private func injectActivity(activity: DiscordRPCBridge.Activity, pid: Int, socketId: Int) {
+    private func injectActivity(activity: DiscordRPCBridge.Activity, processID: Int, socketID: Int) {
         guard let activityJSON = try? JSONEncoder().encode(activity),
               let activityString = String(data: activityJSON, encoding: .utf8),
               let webView = webView else {
@@ -600,7 +600,7 @@ class DiscordRPCBridge: NSObject {
         }
 
         let injectionScript = """
-    (() => {
+        (() => {
             let Dispatcher, lookupApp, lookupAsset;
 
             // Initialize Webpack and Dispatcher
@@ -711,11 +711,16 @@ class DiscordRPCBridge: NSObject {
                 if (activity.assets?.small_image) {
                     activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
                 }
-
+        
                 // Dispatch the updated activity
                 try {
-                    Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
-                    console.info("Activity dispatched successfully:", { type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
+                    Dispatcher.dispatch({
+                        type: 'LOCAL_ACTIVITY_UPDATE',
+                        activity: activity,
+                        pid: \(processID),
+                        socketId: "\(socketID)"
+                    });
+                    console.debug("Activity dispatched successfully:", activity);
                 } catch (e) {
                     console.error("Dispatch error:", e);
                 }
@@ -724,7 +729,7 @@ class DiscordRPCBridge: NSObject {
             // Execute the main function
             processAndDispatchActivity();
         })();
-    """
+        """
 
         DispatchQueue.main.async {
             webView.evaluateJavaScript(injectionScript) { _, error in
@@ -741,17 +746,17 @@ class DiscordRPCBridge: NSObject {
      Injects JavaScript to clear the activity in the Discord web client.
 
      - Parameters:
-       - pid: The process ID.
-       - socketId: The socket ID.
+       - processID: The process ID.
+       - socketID: The socket ID.
      */
-    private func clearActivity(pid: Int, socketId: Int) {
+    private func clearActivity(processID: Int, socketID: Int) {
         guard let webView = webView else { return }
 
         let clearScript = """
         (() => {
-            let dispatcher;
+            let Dispatcher;
 
-            if (!dispatcher) {
+            if (!Dispatcher) {
                 let webpackRequire;
                 window.webpackChunkdiscord_app.push([[Symbol()], {}, x => webpackRequire = x]);
                 window.webpackChunkdiscord_app.pop();
@@ -765,23 +770,23 @@ class DiscordRPCBridge: NSObject {
                         const candidate = module[property];
                         try {
                             if (candidate && candidate.register && candidate.wait) {
-                                dispatcher = candidate;
+                                Dispatcher = candidate;
                                 break;
                             }
                         } catch {}
                     }
 
-                    if (dispatcher) break;
+                    if (Dispatcher) break;
                 }
             }
 
-            if (dispatcher) {
+            if (Dispatcher) {
                 try {
-                    dispatcher.dispatch({ 
+                    Dispatcher.dispatch({ 
                         type: 'LOCAL_ACTIVITY_UPDATE',
                         activity: null,
-                        pid: \(pid),
-                        socketId: "\(socketId)"
+                        pid: \(processID),
+                        socketId: "\(socketID)"
                     });
                     console.info("Activity cleared successfully");
                 } catch (error) {
@@ -818,9 +823,8 @@ class DiscordRPCBridge: NSObject {
         self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
         activityQueue.async {
-            if let client = self.clients[fileDescriptor], let activity = client.activity {
-                self.clearActivity(pid: activity.pid, socketId: activity.socketId)
-                client.activity = nil
+            if let client = self.clients[fileDescriptor], let processID = client.processID, let socketID = client.socketID {
+                self.clearActivity(processID: processID, socketID: socketID)
             }
 
             let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
@@ -834,8 +838,6 @@ class DiscordRPCBridge: NSObject {
         }
     }
 }
-
-// ...existing code...
 
 // MARK: - Structures
 
@@ -899,12 +901,19 @@ extension DiscordRPCBridge {
                 /// Structure representing command arguments within the payload.
                 /// https://discord.com/developers/docs/topics/rpc#setactivity-set-activity-argument-structure
                 struct CommandArguments: Codable {
-                    let pid: Int
+                    let processID: Int
                     let activity: Activity?
 
                     // + because too lazy to make new struct or sideload
                     let code: String?
                     let nonce: String?
+
+                    enum CodingKeys: String, CodingKey {
+                        case processID = "pid"
+                        case activity
+                        case code
+                        case nonce
+                    }
                 }
             }
         }
