@@ -20,6 +20,7 @@ actor ClientManager {
     private var clientSockets = Set<Int32>()
     private var nextSocketID = 1
 
+    /// Adds a new client and returns it.
     func addClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client {
         let client = DiscordRPCBridge.Client(fileDescriptor: fileDescriptor)
         clients[fileDescriptor] = client
@@ -29,13 +30,25 @@ actor ClientManager {
         return client
     }
 
+    /// Retrieves a client by its file descriptor.
     func getClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client? {
         return clients[fileDescriptor]
     }
 
+    /// Removes a client and closes its socket.
     func removeClient(fileDescriptor: Int32) {
         clients.removeValue(forKey: fileDescriptor)
         clientSockets.remove(fileDescriptor)
+        close(fileDescriptor)
+    }
+
+    /// Closes all client sockets, used during deinitialization.
+    func closeAllClients() {
+        for fd in clientSockets {
+            close(fd)
+        }
+        clients.removeAll()
+        clientSockets.removeAll()
     }
 
     var allClientSockets: Set<Int32> {
@@ -52,6 +65,7 @@ class DiscordRPCBridge: NSObject {
     private weak var webView: WKWebView?
 
     private var serverSockets = Set<Int32>()
+    private var serverTask: Task<Void, Never>?
 
     private let clientManager = ClientManager()
 
@@ -78,6 +92,10 @@ class DiscordRPCBridge: NSObject {
         super.init()
     }
 
+    deinit {
+        stopBridge()
+    }
+
     // MARK: - Public Methods
 
     /**
@@ -91,51 +109,58 @@ class DiscordRPCBridge: NSObject {
         await initialiseRPCServer()
     }
 
+    func stopBridge() {
+        serverTask?.cancel()
+        Task {
+            await clientManager.closeAllClients()
+            await shutdownServers()
+        }
+    }
+
     // MARK: - IPC Server Setup
 
     /// Sets up the IPC server by creating and binding Unix Domain Sockets.
     private func initialiseRPCServer() async {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .background).async {
-                self.logger.info("Setting up IPC servers")
-                guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
-                    self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go 😂😂😂 no rpc")
-                    continuation.resume()
-                    return
-                }
+        await withTaskCancellationHandler(operation: {
+            self.logger.info("Setting up IPC servers")
+            guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
+                self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go 😂😂😂 no rpc")
+                return
+            }
 
-                Task {
-                    for socketIndex in 0..<10 {
-                        let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
-                        self.logger.debug("Attempting to bind to socket path: \(socketPath)")
+            for socketIndex in 0..<10 {
+                let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
+                self.logger.debug("Attempting to bind to socket path: \(socketPath)")
 
-                        guard self.prepareSocket(atPath: socketPath) else { continue }
+                guard self.prepareSocket(atPath: socketPath) else { continue }
 
-                        let fileDescriptor = UnixDomainSocket.create(atPath: socketPath)
-                        guard fileDescriptor >= 0 else { continue }
+                let fileDescriptor = UnixDomainSocket.create(atPath: socketPath)
+                guard fileDescriptor >= 0 else { continue }
 
-                        if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
-                            UnixDomainSocket.listen(on: fileDescriptor)
-                            Task {
-                                await self.acceptConnections(on: fileDescriptor)
-                            }
-                            self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
-                            self.isServerReady = true
-                            self.logger.info("IPC server is ready to accept connections.")
-                            break
-                        } else {
-                            close(fileDescriptor)
-                            self.logger.warning("Failed to bind to socket path: \(socketPath). Trying next socket.")
-                        }
+                if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
+                    UnixDomainSocket.listen(on: fileDescriptor)
+                    self.serverSockets.insert(fileDescriptor)
+                    Task.detached {
+                        await self.acceptConnections(on: fileDescriptor)
                     }
-
-                    if self.clientManager.allClientSockets.isEmpty {
-                        self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
-                    }
-                    continuation.resume()
+                    self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
+                    self.isServerReady = true
+                    self.logger.info("IPC server is ready to accept connections.")
+                    break
+                } else {
+                    close(fileDescriptor)
+                    self.logger.warning("Failed to bind to socket path: \(socketPath). Trying next socket.")
                 }
             }
-        }
+
+            if self.serverSockets.isEmpty {
+                self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
+            }
+        }, onCancel: {
+            Task {
+                await shutdownServers()
+            }
+        })
     }
 
     /**
@@ -156,6 +181,14 @@ class DiscordRPCBridge: NSObject {
         let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFD, toPath: path)
         self.logger.info("Socket \(path) is \(inUse ? "in use" : "available")")
         return inUse
+    }
+
+    private func shutdownServers() async {
+        for fileDescriptor in serverSockets {
+            await socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
+        }
+        serverSockets.removeAll()
+        self.logger.info("All server sockets have been shut down.")
     }
 
     /**
@@ -182,23 +215,49 @@ class DiscordRPCBridge: NSObject {
     }
 
     /**
+     Closes the socket and cleans up client state.
+
+     - Parameters:
+       - fileDescriptor: The client socket file descriptor.
+       - code: The closure code.
+       - message: The closure message.
+     */
+    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode, message: String? = nil) async {
+        self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
+
+        if let client = await clientManager.getClient(fileDescriptor: fileDescriptor),
+           let processID = client.processID,
+           let socketID = client.socketID {
+            await clearActivity(processID: processID, socketID: socketID)
+        }
+
+        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+        await send(packet: closePayload, operationCode: .close, to: fileDescriptor)
+
+        await clientManager.removeClient(fileDescriptor: fileDescriptor)
+
+        self.logger.info("Socket closed on FD \(fileDescriptor)")
+    }
+
+    /**
      Accepts incoming connections on the given socket file descriptor.
 
      - Parameter fileDescriptor: The socket file descriptor.
      */
     private func acceptConnections(on fileDescriptor: Int32) async {
         self.logger.info("Started accepting connections on FD \(fileDescriptor)")
-        while true {
+        while !Task.isCancelled {
             let clientFD = UnixDomainSocket.acceptConnection(on: fileDescriptor)
             guard clientFD >= 0 else { continue }
 
-            let client = await clientManager.addClient(fileDescriptor: clientFD)
+            _ = await clientManager.addClient(fileDescriptor: clientFD)
             self.logger.info("Accepted connection on FD \(clientFD)")
 
-            Task.detached {
-                await self.handleClient(clientFD)
+            Task.detached { [weak self] in
+                await self?.handleClient(clientFD)
             }
         }
+        self.logger.info("Stopped accepting connections on FD \(fileDescriptor)")
     }
 
     // MARK: - Client Handling
@@ -222,9 +281,14 @@ class DiscordRPCBridge: NSObject {
         self.logger.debug("Starting read loop on FD \(fileDescriptor)")
         let bufferSize = 65536
 
-        defer { self.logger.debug("Read loop terminated on FD \(fileDescriptor)") }
+        defer {
+            self.logger.debug("Read loop terminated on FD \(fileDescriptor)")
+            Task {
+                await socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.ratelimited, message: "Read loop terminated")
+            }
+        }
 
-        while true {
+        while !Task.isCancelled {
             guard let message = await readMessage(from: fileDescriptor, bufferSize: bufferSize) else {
                 await socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.ratelimited, message: "Failed to read message")
                 return
@@ -242,9 +306,8 @@ class DiscordRPCBridge: NSObject {
      - Returns: An `IPC.Message` if successfully read, otherwise `nil`.
      */
     private func readMessage(from fileDescriptor: Int32, bufferSize: Int) async -> IPC.Message? {
-        // Implement asynchronous reading if possible
         return await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
+            Task {
                 guard let data = self.readExactData(from: fileDescriptor, count: 8) else {
                     continuation.resume(returning: nil)
                     return
@@ -753,6 +816,7 @@ class DiscordRPCBridge: NSObject {
         DispatchQueue.main.async {
             webView.evaluateJavaScript(injectionScript) { _, error in
                 if let error = error {
+                    // deal with it, i can't fix these warnings because of a swift bug
                     self.logger.error("Error injecting activity: \(error.localizedDescription)")
                 } else {
                     self.logger.debug("Activity injected successfully.")
@@ -820,40 +884,13 @@ class DiscordRPCBridge: NSObject {
         DispatchQueue.main.async {
             webView.evaluateJavaScript(clearScript) { _, error in
                 if let error = error {
+                    // deal with it, i can't fix these warnings because of a swift bug
                     self.logger.error("Error clearing activity: \(error.localizedDescription)")
                 } else {
                     self.logger.debug("Activity cleared successfully")
                 }
             }
         }
-    }
-
-    // MARK: - Socket Management
-
-    /**
-     Closes the socket and cleans up client state.
-
-     - Parameters:
-       - fileDescriptor: The client socket file descriptor.
-       - code: The closure code.
-       - message: The closure message.
-     */
-    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode, message: String? = nil) async {
-        self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
-
-        if let client = await clientManager.getClient(fileDescriptor: fileDescriptor),
-           let processID = client.processID,
-           let socketID = client.socketID {
-            await clearActivity(processID: processID, socketID: socketID)
-        }
-
-        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-        await send(packet: closePayload, operationCode: .close, to: fileDescriptor)
-
-        await clientManager.removeClient(fileDescriptor: fileDescriptor)
-
-        close(fileDescriptor)
-        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
 }
 
