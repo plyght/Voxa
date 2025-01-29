@@ -119,6 +119,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - Returns: `true` if preparation is successful, otherwise `false`.
      */
     private func prepareSocket(at path: String) -> Bool {
+        if isSocketInUse(at: path) {
+            self.logger.error("Socket \(path) is already in use; skipping removal.")
+            return false
+        }
         do {
             if FileManager.default.fileExists(atPath: path) {
                 try FileManager.default.removeItem(atPath: path)
@@ -144,7 +148,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 guard clientFileDescriptor >= 0 else { continue }
                 self.serverSockets.append(clientFileDescriptor)
                 self.logger.info("Accepted connection on FD \(clientFileDescriptor)")
-                self.handleClient(clientFileDescriptor)
+                
+                DispatchQueue.global(qos: .background).async {
+                    self.handleClient(clientFileDescriptor)
+                }
             }
         }
     }
@@ -567,145 +574,143 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             return
         }
 
-        self.logger.debug("Injecting activity into Webview: \(activityString)")
-
         let injectionScript = """
-                (() => {
-                    let Dispatcher, lookupApp, lookupAsset;
-        
-                    // Initialize Webpack and Dispatcher
-                    if (!Dispatcher) {
-                        let wpRequire;
-                        window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
-                        window.webpackChunkdiscord_app.pop();
-        
-                        const modules = wpRequire.c;
-        
-                        for (const id in modules) {
-                            const mod = modules[id].exports;
-        
-                            for (const prop in mod) {
-                                const candidate = mod[prop];
-                                try {
-                                    if (candidate && candidate.register && candidate.wait) {
-                                        Dispatcher = candidate;
-                                        break;
-                                    }
-                                } catch {}
+        (() => {
+            let Dispatcher, lookupApp, lookupAsset;
+
+            // Initialize Webpack and Dispatcher
+            if (!Dispatcher) {
+                let wpRequire;
+                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
+                window.webpackChunkdiscord_app.pop();
+
+                const modules = wpRequire.c;
+
+                for (const id in modules) {
+                    const mod = modules[id].exports;
+
+                    for (const prop in mod) {
+                        const candidate = mod[prop];
+                        try {
+                            if (candidate && candidate.register && candidate.wait) {
+                                Dispatcher = candidate;
+                                break;
                             }
-        
-                            if (Dispatcher) break;
+                        } catch {}
+                    }
+
+                    if (Dispatcher) break;
+                }
+            }
+
+            // Initialize lookupApp and lookupAsset
+            if (!lookupApp || !lookupAsset) {
+                const factories = wpRequire.m;
+
+                for (const id in factories) {
+                    if (factories[id].toString().includes('APPLICATION_RPC(')) {
+                        const mod = wpRequire(id);
+
+                        // fetchApplicationsRPC
+                        const _lookupApp = Object.values(mod).find(e => {
+                            if (typeof e !== 'function') return;
+                            const str = e.toString();
+                            return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
+                        });
+                        if (_lookupApp) {
+                            lookupApp = async appId => {
+                                let socket = {};
+                                await _lookupApp(socket, appId);
+                                return socket.application;
+                            };
                         }
                     }
-        
-                    // Initialize lookupApp and lookupAsset
-                    if (!lookupApp || !lookupAsset) {
-                        const factories = wpRequire.m;
-        
-                        for (const id in factories) {
-                            if (factories[id].toString().includes('APPLICATION_RPC(')) {
-                                const mod = wpRequire(id);
-        
-                                // fetchApplicationsRPC
-                                const _lookupApp = Object.values(mod).find(e => {
-                                    if (typeof e !== 'function') return;
-                                    const str = e.toString();
-                                    return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
-                                });
-                                if (_lookupApp) {
-                                    lookupApp = async appId => {
-                                        let socket = {};
-                                        await _lookupApp(socket, appId);
-                                        return socket.application;
-                                    };
-                                }
-                            }
-        
-                            if (lookupApp) break;
-                        }
-        
-                        for (const id in factories) {
-                            if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
-                                const mod = wpRequire(id);
-        
-                                // fetchAssetIds
-                                const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
-                                if (_lookupAsset) {
-                                    lookupAsset = async (appId, name) => {
-                                        const result = await _lookupAsset(appId, [ name, undefined ]);
-                                        return result[0];
-                                    };
-                                }
-                            }
-        
-                            if (lookupAsset) break;
+
+                    if (lookupApp) break;
+                }
+
+                for (const id in factories) {
+                    if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
+                        const mod = wpRequire(id);
+
+                        // fetchAssetIds
+                        const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
+                        if (_lookupAsset) {
+                            lookupAsset = async (appId, name) => {
+                                const result = await _lookupAsset(appId, [ name, undefined ]);
+                                return result[0];
+                            };
                         }
                     }
-        
-                    // Function to fetch application name
-                    const fetchAppName = async appId => {
-                        if (!lookupApp) {
-                            console.error("lookupApp function not found");
-                            return "Unknown Application";
-                        }
-                        try {
-                            const app = await lookupApp(appId);
-                            return app?.name || "Unknown Application";
-                        } catch (error) {
-                            console.error("Error fetching application name:", error);
-                            return "Unknown Application";
-                        }
-                    };
-        
-                    // Function to fetch asset image URL
-                    const fetchAssetImage = async (appId, imageName) => {
-                        if (!lookupAsset) {
-                            console.error("lookupAsset function not found");
-                            return imageName;
-                        }
-                        try {
-                            const assetUrl = await lookupAsset(appId, imageName);
-                            return assetUrl || imageName;
-                        } catch (error) {
-                            console.error("Error fetching asset image:", error);
-                            return imageName;
-                        }
-                    };
-        
-                    // Main function to process and dispatch activity
-                    const processAndDispatchActivity = async () => {
-                        if (!Dispatcher) {
-                            console.error("Dispatcher not found");
-                            return;
-                        }
-        
-                        const activity = \(activityString);
-        
-                        // Fetch application name
-                        if (activity.application_id) {
-                            activity.name = await fetchAppName(activity.application_id);
-                        }
-        
-                        // Fetch asset images
-                        if (activity.assets?.large_image) {
-                            activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
-                        }
-                        if (activity.assets?.small_image) {
-                            activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
-                        }
-        
-                        // Dispatch the updated activity
-                        try {
-                            Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
-                            console.info("Activity dispatched successfully:", activity);
-                        } catch (e) {
-                            console.error("Dispatch error:", e);
-                        }
-                    };
-        
-                    // Execute the main function
-                    processAndDispatchActivity();
-                })();
+
+                    if (lookupAsset) break;
+                }
+            }
+
+            // Function to fetch application name
+            const fetchAppName = async appId => {
+                if (!lookupApp) {
+                    console.error("lookupApp function not found");
+                    return "Unknown Application";
+                }
+                try {
+                    const app = await lookupApp(appId);
+                    return app?.name || "Unknown Application";
+                } catch (error) {
+                    console.error("Error fetching application name:", error);
+                    return "Unknown Application";
+                }
+            };
+
+            // Function to fetch asset image URL
+            const fetchAssetImage = async (appId, imageName) => {
+                if (!lookupAsset) {
+                    console.error("lookupAsset function not found");
+                    return imageName;
+                }
+                try {
+                    const assetUrl = await lookupAsset(appId, imageName);
+                    return assetUrl || imageName;
+                } catch (error) {
+                    console.error("Error fetching asset image:", error);
+                    return imageName;
+                }
+            };
+
+            // Main function to process and dispatch activity
+            const processAndDispatchActivity = async () => {
+                if (!Dispatcher) {
+                    console.error("Dispatcher not found");
+                    return;
+                }
+
+                const activity = \(activityString);
+
+                // Fetch application name
+                if (activity.application_id) {
+                    activity.name = await fetchAppName(activity.application_id);
+                }
+
+                // Fetch asset images
+                if (activity.assets?.large_image) {
+                    activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
+                }
+                if (activity.assets?.small_image) {
+                    activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
+                }
+
+                // Dispatch the updated activity
+                try {
+                    Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
+                    console.info("Activity dispatched successfully:", activity);
+                } catch (e) {
+                    console.error("Dispatch error:", e);
+                }
+            };
+
+            // Execute the main function
+            processAndDispatchActivity();
+        })();
         """
 
         DispatchQueue.main.async {
@@ -1213,7 +1218,7 @@ extension DiscordRPCBridge {
          - Parameter fileDescriptor: The socket file descriptor.
          */
         static func listen(on fileDescriptor: Int32) {
-            if Darwin.listen(fileDescriptor, 1) < 0 {
+            if Darwin.listen(fileDescriptor, 128) < 0 {
                 self.logger.error("Failed to listen on FD \(fileDescriptor), errno=\(errno)")
             } else {
                 self.logger.debug("Listening on FD \(fileDescriptor)")
