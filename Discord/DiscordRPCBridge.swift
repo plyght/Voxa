@@ -21,11 +21,18 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
     )
 
     private weak var webView: WKWebView?
+
     private var serverSockets: [Int32] = []
+    private var clientSockets: [Int32] = []
+    private var activitySocketCounter: Int = 0
+
     private var clientHandshakes: [Int32: Bool] = [:]
     private var clientIds: [Int32: String] = [:]
-    private var activitySocketCounter: Int = 0
     private var clientActivity: [Int32: (pid: Int, socketId: Int)] = [:]
+
+    private let activityQueue = DispatchQueue(label: "activityQueue")
+
+    private var isServerReady: Bool = false
 
     static let shared = DiscordRPCBridge()
 
@@ -82,7 +89,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 }
             }
 
-            if !bound {
+            if bound {
+                self.isServerReady = true
+                self.logger.info("IPC server is ready to accept connections.")
+            } else {
                 self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
             }
         }
@@ -142,13 +152,18 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      */
     private func acceptConnections(on fileDescriptor: Int32) {
         DispatchQueue.global(qos: .background).async {
+            // Wait until the server is ready
+            while !self.isServerReady {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
             self.logger.info("Started accepting connections on FD \(fileDescriptor)")
             while true {
                 let clientFileDescriptor = UnixDomainSocket.acceptConnection(on: fileDescriptor)
                 guard clientFileDescriptor >= 0 else { continue }
-                self.serverSockets.append(clientFileDescriptor)
+
+                self.clientSockets.append(clientFileDescriptor)
                 self.logger.info("Accepted connection on FD \(clientFileDescriptor)")
-                
+
                 DispatchQueue.global(qos: .background).async {
                     self.handleClient(clientFileDescriptor)
                 }
@@ -404,33 +419,35 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             return
         }
 
-        if var activity = arguments.activity {
-            // 1. Copy application_id from handshake or use existing
-            if activity.applicationId == nil, let clientID = clientIds[fileDescriptor] {
-                activity.applicationId = clientID
+        activityQueue.async {
+            if var activity = arguments.activity {
+                // 1. Copy application_id from handshake or use existing
+                if activity.applicationId == nil, let clientID = self.clientIds[fileDescriptor] {
+                    activity.applicationId = clientID
+                }
+
+                // 2. Set the name based on application_id if it's still "Unknown Activity"
+                // Handled by asset fetching integration
+
+                // 3. Handle instance => flags
+                let isInstance = activity.instance ?? false
+                activity.flags = isInstance ? (1 << 0) : 0
+
+                // 4. Increment local counters and inject
+                self.activitySocketCounter += 1
+                let socketId = self.activitySocketCounter
+                self.clientActivity[fileDescriptor] = (arguments.pid, socketId)
+
+                self.injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
+                self.respondSuccess(to: fileDescriptor, with: payload)
+            } else {
+                if let existingActivity = self.clientActivity[fileDescriptor] {
+                    self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
+                    self.clientActivity.removeValue(forKey: fileDescriptor)
+                    self.logger.info("Cleared activity for FD \(fileDescriptor)")
+                }
+                self.respondSuccess(to: fileDescriptor, with: payload)
             }
-
-            // 2. Set the name based on application_id if it's still "Unknown Activity"
-            // Handled by asset fetching integration
-
-            // 3. Handle instance => flags
-            let isInstance = activity.instance ?? false
-            activity.flags = isInstance ? (1 << 0) : 0
-
-            // 4. Increment local counters and inject
-            activitySocketCounter += 1
-            let socketId = activitySocketCounter
-            clientActivity[fileDescriptor] = (arguments.pid, socketId)
-
-            injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
-            respondSuccess(to: fileDescriptor, with: payload)
-        } else {
-            if let existingActivity = clientActivity[fileDescriptor] {
-                clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
-                clientActivity.removeValue(forKey: fileDescriptor)
-                self.logger.info("Cleared activity for FD \(fileDescriptor)")
-            }
-            respondSuccess(to: fileDescriptor, with: payload)
         }
     }
 
@@ -575,143 +592,150 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         }
 
         let injectionScript = """
-        (() => {
-            let Dispatcher, lookupApp, lookupAsset;
-
-            // Initialize Webpack and Dispatcher
+    (() => {
+        if (!window._voxaDispatcher) {
+            let wpRequire;
+            window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
+            window.webpackChunkdiscord_app.pop();
+    
+            const modules = wpRequire.c;
+            for (const id in modules) {
+                const mod = modules[id].exports;
+                for (const prop in mod) {
+                    const candidate = mod[prop];
+                    if (candidate && candidate.register && candidate.wait) {
+                        window._voxaDispatcher = candidate;
+                        break;
+                    }
+                }
+                if (window._voxaDispatcher) break;
+            }
+        }
+    
+        const Dispatcher = window._voxaDispatcher;
+        if (!Dispatcher) {
+            console.error("Dispatcher not found");
+            return;
+        }
+    
+        const activity = \(activityString);
+        // For subsequent updates, ensure unique activity fields if needed:
+        activity._updateTimestamp = Date.now();
+    
+        // Asset lookup and fetching
+        let lookupApp, lookupAsset;
+    
+        if (!lookupApp || !lookupAsset) {
+            const factories = wpRequire.m;
+    
+            for (const id in factories) {
+                if (factories[id].toString().includes('APPLICATION_RPC(')) {
+                    const mod = wpRequire(id);
+    
+                    // fetchApplicationsRPC
+                    const _lookupApp = Object.values(mod).find(e => {
+                        if (typeof e !== 'function') return;
+                        const str = e.toString();
+                        return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
+                    });
+                    if (_lookupApp) {
+                        lookupApp = async appId => {
+                            let socket = {};
+                            await _lookupApp(socket, appId);
+                            return socket.application;
+                        };
+                    }
+                }
+    
+                if (lookupApp) break;
+            }
+    
+            for (const id in factories) {
+                if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
+                    const mod = wpRequire(id);
+    
+                    // fetchAssetIds
+                    const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
+                    if (_lookupAsset) {
+                        lookupAsset = async (appId, name) => {
+                            const result = await _lookupAsset(appId, [ name, undefined ]);
+                            return result[0];
+                        };
+                    }
+                }
+    
+                if (lookupAsset) break;
+            }
+        }
+    
+        // Function to fetch application name
+        const fetchAppName = async appId => {
+            if (!lookupApp) {
+                console.error("lookupApp function not found");
+                return "Unknown Application";
+            }
+            try {
+                const app = await lookupApp(appId);
+                return app?.name || "Unknown Application";
+            } catch (error) {
+                console.error("Error fetching application name:", error);
+                return "Unknown Application";
+            }
+        };
+    
+        // Function to fetch asset image URL
+        const fetchAssetImage = async (appId, imageName) => {
+            if (!lookupAsset) {
+                console.error("lookupAsset function not found");
+                return imageName;
+            }
+            try {
+                const assetUrl = await lookupAsset(appId, imageName);
+                return assetUrl || imageName;
+            } catch (error) {
+                console.error("Error fetching asset image:", error);
+                return imageName;
+            }
+        };
+    
+        // Main function to process and dispatch activity
+        const processAndDispatchActivity = async () => {
             if (!Dispatcher) {
-                let wpRequire;
-                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
-                window.webpackChunkdiscord_app.pop();
-
-                const modules = wpRequire.c;
-
-                for (const id in modules) {
-                    const mod = modules[id].exports;
-
-                    for (const prop in mod) {
-                        const candidate = mod[prop];
-                        try {
-                            if (candidate && candidate.register && candidate.wait) {
-                                Dispatcher = candidate;
-                                break;
-                            }
-                        } catch {}
-                    }
-
-                    if (Dispatcher) break;
-                }
+                console.error("Dispatcher not found");
+                return;
             }
-
-            // Initialize lookupApp and lookupAsset
-            if (!lookupApp || !lookupAsset) {
-                const factories = wpRequire.m;
-
-                for (const id in factories) {
-                    if (factories[id].toString().includes('APPLICATION_RPC(')) {
-                        const mod = wpRequire(id);
-
-                        // fetchApplicationsRPC
-                        const _lookupApp = Object.values(mod).find(e => {
-                            if (typeof e !== 'function') return;
-                            const str = e.toString();
-                            return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
-                        });
-                        if (_lookupApp) {
-                            lookupApp = async appId => {
-                                let socket = {};
-                                await _lookupApp(socket, appId);
-                                return socket.application;
-                            };
-                        }
-                    }
-
-                    if (lookupApp) break;
-                }
-
-                for (const id in factories) {
-                    if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
-                        const mod = wpRequire(id);
-
-                        // fetchAssetIds
-                        const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
-                        if (_lookupAsset) {
-                            lookupAsset = async (appId, name) => {
-                                const result = await _lookupAsset(appId, [ name, undefined ]);
-                                return result[0];
-                            };
-                        }
-                    }
-
-                    if (lookupAsset) break;
-                }
+    
+            // Fetch application name
+            if (activity.application_id) {
+                activity.name = await fetchAppName(activity.application_id);
             }
-
-            // Function to fetch application name
-            const fetchAppName = async appId => {
-                if (!lookupApp) {
-                    console.error("lookupApp function not found");
-                    return "Unknown Application";
-                }
-                try {
-                    const app = await lookupApp(appId);
-                    return app?.name || "Unknown Application";
-                } catch (error) {
-                    console.error("Error fetching application name:", error);
-                    return "Unknown Application";
-                }
-            };
-
-            // Function to fetch asset image URL
-            const fetchAssetImage = async (appId, imageName) => {
-                if (!lookupAsset) {
-                    console.error("lookupAsset function not found");
-                    return imageName;
-                }
-                try {
-                    const assetUrl = await lookupAsset(appId, imageName);
-                    return assetUrl || imageName;
-                } catch (error) {
-                    console.error("Error fetching asset image:", error);
-                    return imageName;
-                }
-            };
-
-            // Main function to process and dispatch activity
-            const processAndDispatchActivity = async () => {
-                if (!Dispatcher) {
-                    console.error("Dispatcher not found");
-                    return;
-                }
-
-                const activity = \(activityString);
-
-                // Fetch application name
-                if (activity.application_id) {
-                    activity.name = await fetchAppName(activity.application_id);
-                }
-
-                // Fetch asset images
-                if (activity.assets?.large_image) {
-                    activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
-                }
-                if (activity.assets?.small_image) {
-                    activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
-                }
-
-                // Dispatch the updated activity
-                try {
-                    Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
-                    console.info("Activity dispatched successfully:", activity);
-                } catch (e) {
-                    console.error("Dispatch error:", e);
-                }
-            };
-
-            // Execute the main function
-            processAndDispatchActivity();
-        })();
-        """
+    
+            // Fetch asset images
+            if (activity.assets?.large_image) {
+                activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
+            }
+            if (activity.assets?.small_image) {
+                activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
+            }
+    
+            // Dispatch the updated activity
+            try {
+                Dispatcher.dispatch({
+                    type: 'LOCAL_ACTIVITY_UPDATE',
+                    activity: activity,
+                    pid: \(pid),
+                    socketId: "\(socketId)"
+                });
+                console.info("Activity dispatched successfully:", activity);
+            } catch (e) {
+                console.error("Dispatch error:", e);
+            }
+        };
+    
+        // Execute the main function
+        processAndDispatchActivity();
+    })();
+    """
 
         DispatchQueue.main.async {
             webView.evaluateJavaScript(injectionScript) { _, error in
@@ -723,6 +747,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             }
         }
     }
+    // ...existing code...
 
     /**
      Injects JavaScript to clear the activity in the Discord web client.
@@ -804,20 +829,22 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
     private func socketClose(fileDescriptor: Int32, code: IPC.IPCError, message: String? = nil) {
         self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
-        if let activity = clientActivity[fileDescriptor] {
-            clearActivity(pid: activity.pid, socketId: activity.socketId)
-            clientActivity.removeValue(forKey: fileDescriptor)
+        activityQueue.async {
+            if let activity = self.clientActivity[fileDescriptor] {
+                self.clearActivity(pid: activity.pid, socketId: activity.socketId)
+                self.clientActivity.removeValue(forKey: fileDescriptor)
+            }
+
+            let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+            self.send(packet: closePayload, op: .close, to: fileDescriptor)
+
+            self.clientHandshakes.removeValue(forKey: fileDescriptor)
+            self.clientIds.removeValue(forKey: fileDescriptor)
+            self.clientSockets.removeAll { $0 == fileDescriptor }
+
+            close(fileDescriptor)
+            self.logger.info("Socket closed on FD \(fileDescriptor)")
         }
-
-        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-        send(packet: closePayload, op: .close, to: fileDescriptor)
-
-        clientHandshakes.removeValue(forKey: fileDescriptor)
-        clientIds.removeValue(forKey: fileDescriptor)
-        serverSockets.removeAll { $0 == fileDescriptor }
-
-        close(fileDescriptor)
-        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
 }
 
