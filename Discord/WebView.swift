@@ -477,7 +477,9 @@ struct WebView: NSViewRepresentable {
             )
         )
 
-        DiscordRPCBridge.shared.startBridge(for: webView)
+        Task {
+            await DiscordRPCBridge.shared.startBridge(for: webView)
+        }
 
         loadPluginsAndCSS(webView: webView)
         loadInitialURL(webView: webView) // TODO: swiftUI view err instead

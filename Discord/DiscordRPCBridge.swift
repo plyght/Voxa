@@ -15,6 +15,34 @@ import SwiftUI
  It sets up a Unix Domain Socket server to listen for Discord IPC connections.
  Thank you @vapidinfinity 🙏🏾
  */
+actor ClientManager {
+    private var clients = [Int32: DiscordRPCBridge.Client]()
+    private var clientSockets = Set<Int32>()
+    private var nextSocketID = 1
+
+    func addClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client {
+        let client = DiscordRPCBridge.Client(fileDescriptor: fileDescriptor)
+        clients[fileDescriptor] = client
+        clientSockets.insert(fileDescriptor)
+        client.socketID = nextSocketID
+        nextSocketID += 1
+        return client
+    }
+
+    func getClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client? {
+        return clients[fileDescriptor]
+    }
+
+    func removeClient(fileDescriptor: Int32) {
+        clients.removeValue(forKey: fileDescriptor)
+        clientSockets.remove(fileDescriptor)
+    }
+
+    var allClientSockets: Set<Int32> {
+        return clientSockets
+    }
+}
+
 class DiscordRPCBridge: NSObject {
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
@@ -24,11 +52,10 @@ class DiscordRPCBridge: NSObject {
     private weak var webView: WKWebView?
 
     private var serverSockets = Set<Int32>()
-    private var clientSockets = Set<Int32>()
 
-    private var nextSocketID = 1
-    private var clients = [Int32: Client]()
-    private class Client {
+    private let clientManager = ClientManager()
+
+    class Client {
         let fileDescriptor: Int32
         var isAcknowledged: Bool = false
         var clientID: String?
@@ -58,48 +85,55 @@ class DiscordRPCBridge: NSObject {
 
      - Parameter webView: The WKWebView instance to bridge with.
      */
-    func startBridge(for webView: WKWebView) {
+    func startBridge(for webView: WKWebView) async {
         self.webView = webView
         self.logger.info("Starting DiscordRPCBridge")
-        initialiseRPCServer()
+        await initialiseRPCServer()
     }
 
     // MARK: - IPC Server Setup
 
     /// Sets up the IPC server by creating and binding Unix Domain Sockets.
-    private func initialiseRPCServer() {
-        DispatchQueue.global(qos: .background).async {
-            self.logger.info("Setting up IPC servers")
-            guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
-                self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go 😂😂😂 no rpc")
-                return
-            }
-
-            for socketIndex in 0..<10 {
-                let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
-                self.logger.debug("Attempting to bind to socket path: \(socketPath)")
-
-                guard self.prepareSocket(atPath: socketPath) else { continue }
-
-                let fileDescriptor = UnixDomainSocket.create(atPath: socketPath)
-                guard fileDescriptor >= 0 else { continue }
-
-                if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
-                    UnixDomainSocket.listen(on: fileDescriptor)
-                    self.serverSockets.insert(fileDescriptor)
-                    self.acceptConnections(on: fileDescriptor)
-                    self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
-                    self.isServerReady = true
-                    self.logger.info("IPC server is ready to accept connections.")
-                    break
-                } else {
-                    close(fileDescriptor)
-                    self.logger.warning("Failed to bind to socket path: \(socketPath). Trying next socket.")
+    private func initialiseRPCServer() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .background).async {
+                self.logger.info("Setting up IPC servers")
+                guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
+                    self.logger.fault("TMPDIR environment variable not set! Voxa has no idea where the unix domain sockets should go 😂😂😂 no rpc")
+                    continuation.resume()
+                    return
                 }
-            }
 
-            if self.serverSockets.isEmpty {
-                self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
+                Task {
+                    for socketIndex in 0..<10 {
+                        let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
+                        self.logger.debug("Attempting to bind to socket path: \(socketPath)")
+
+                        guard self.prepareSocket(atPath: socketPath) else { continue }
+
+                        let fileDescriptor = UnixDomainSocket.create(atPath: socketPath)
+                        guard fileDescriptor >= 0 else { continue }
+
+                        if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
+                            UnixDomainSocket.listen(on: fileDescriptor)
+                            Task {
+                                await self.acceptConnections(on: fileDescriptor)
+                            }
+                            self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
+                            self.isServerReady = true
+                            self.logger.info("IPC server is ready to accept connections.")
+                            break
+                        } else {
+                            close(fileDescriptor)
+                            self.logger.warning("Failed to bind to socket path: \(socketPath). Trying next socket.")
+                        }
+                    }
+
+                    if self.clientManager.allClientSockets.isEmpty {
+                        self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
+                    }
+                    continuation.resume()
+                }
             }
         }
     }
@@ -152,26 +186,17 @@ class DiscordRPCBridge: NSObject {
 
      - Parameter fileDescriptor: The socket file descriptor.
      */
-    private func acceptConnections(on fileDescriptor: Int32) {
-        DispatchQueue.global(qos: .background).async {
-            // Wait until the server is ready
-            while !self.isServerReady {
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-            self.logger.info("Started accepting connections on FD \(fileDescriptor)")
-            while true {
-                let clientFD = UnixDomainSocket.acceptConnection(on: fileDescriptor)
-                guard clientFD >= 0 else { continue }
+    private func acceptConnections(on fileDescriptor: Int32) async {
+        self.logger.info("Started accepting connections on FD \(fileDescriptor)")
+        while true {
+            let clientFD = UnixDomainSocket.acceptConnection(on: fileDescriptor)
+            guard clientFD >= 0 else { continue }
 
-                self.clientSockets.insert(clientFD)
-                self.logger.info("Accepted connection on FD \(clientFD)")
+            let client = await clientManager.addClient(fileDescriptor: clientFD)
+            self.logger.info("Accepted connection on FD \(clientFD)")
 
-                let client = Client(fileDescriptor: clientFD)
-                self.clients[clientFD] = client
-
-                DispatchQueue.global(qos: .background).async {
-                    self.handleClient(clientFD)
-                }
+            Task.detached {
+                await self.handleClient(clientFD)
             }
         }
     }
@@ -183,9 +208,9 @@ class DiscordRPCBridge: NSObject {
 
      - Parameter fileDescriptor: The client socket file descriptor.
      */
-    private func handleClient(_ fileDescriptor: Int32) {
+    private func handleClient(_ fileDescriptor: Int32) async {
         self.logger.debug("Handling client on FD \(fileDescriptor)")
-        startReadLoop(on: fileDescriptor)
+        await startReadLoop(on: fileDescriptor)
     }
 
     /**
@@ -193,18 +218,18 @@ class DiscordRPCBridge: NSObject {
 
      - Parameter fileDescriptor: The client socket file descriptor.
      */
-    private func startReadLoop(on fileDescriptor: Int32) {
+    private func startReadLoop(on fileDescriptor: Int32) async {
         self.logger.debug("Starting read loop on FD \(fileDescriptor)")
         let bufferSize = 65536
 
         defer { self.logger.debug("Read loop terminated on FD \(fileDescriptor)") }
 
         while true {
-            guard let message = readMessage(from: fileDescriptor, bufferSize: bufferSize) else {
-                socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.ratelimited, message: "Failed to read message")
+            guard let message = await readMessage(from: fileDescriptor, bufferSize: bufferSize) else {
+                await socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.ratelimited, message: "Failed to read message")
                 return
             }
-            handleIPCMessage(message, from: fileDescriptor)
+            await handleIPCMessage(message, from: fileDescriptor)
         }
     }
 
@@ -216,58 +241,59 @@ class DiscordRPCBridge: NSObject {
        - bufferSize: The maximum buffer size.
      - Returns: An `IPC.Message` if successfully read, otherwise `nil`.
      */
-    private func readMessage(from fileDescriptor: Int32, bufferSize: Int) -> IPC.Message? {
-        guard let data = readExactData(from: fileDescriptor, count: 8) else { return nil }
-        let header = data
+    private func readMessage(from fileDescriptor: Int32, bufferSize: Int) async -> IPC.Message? {
+        // Implement asynchronous reading if possible
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                guard let data = self.readExactData(from: fileDescriptor, count: 8) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let header = data
 
-        guard let operationCode = IPC.OperationCode(rawValue: Int32(littleEndian: header.withUnsafeBytes { $0.load(as: Int32.self) })) else {
-            self.logger.error("Invalid operation code received: \(header.map { String(format: "%02hhx", $0) }.joined())")
-            return nil
+                guard let operationCode = IPC.OperationCode(rawValue: Int32(littleEndian: header.withUnsafeBytes { $0.load(as: Int32.self) })) else {
+                    self.logger.error("Invalid operation code received: \(header.map { String(format: "%02hhx", $0) }.joined())")
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let length = Int32(littleEndian: header.withUnsafeBytes { $0.load(fromByteOffset: 4, as: Int32.self) })
+
+                self.logger.debug("Received packet - op: \(operationCode.rawValue), length: \(length) on FD \(fileDescriptor)")
+
+                guard length > 0, length <= bufferSize else {
+                    self.logger.error("Invalid packet length: \(length) on FD \(fileDescriptor)")
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                guard let payloadData = self.readExactData(from: fileDescriptor, count: Int(length)) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                self.logger.debug("Payload Data Length: \(payloadData.count) bytes")
+
+                if let payloadString = String(data: payloadData, encoding: .utf8) {
+                    self.logger.debug("Payload Data: \(payloadString)")
+                } else {
+                    self.logger.debug("Payload Data: Unable to convert to string")
+                }
+
+                let decoder = JSONDecoder()
+                let payload: IPC.Message.Payload
+
+                do {
+                    payload = try decoder.decode(IPC.Message.Payload.self, from: payloadData)
+                } catch {
+                    self.logger.error("Failed to decode IPC message on FD \(fileDescriptor): \(error.localizedDescription)")
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                continuation.resume(returning: IPC.Message(operationCode: operationCode, payload: payload))
+            }
         }
-
-        let length = Int32(littleEndian: header.withUnsafeBytes { $0.load(fromByteOffset: 4, as: Int32.self) })
-
-        self.logger.debug("Received packet - op: \(operationCode.rawValue), length: \(length) on FD \(fileDescriptor)")
-
-        guard length > 0, length <= bufferSize else {
-            self.logger.error("Invalid packet length: \(length) on FD \(fileDescriptor)")
-            return nil
-        }
-
-        guard let payloadData = readExactData(from: fileDescriptor, count: Int(length)) else { return nil }
-
-        self.logger.debug("Payload Data Length: \(payloadData.count) bytes")
-
-        // Optional: Log payload as string for debugging
-        if let payloadString = String(data: payloadData, encoding: .utf8) {
-            self.logger.debug("Payload Data: \(payloadString)")
-        } else {
-            self.logger.debug("Payload Data: Unable to convert to string")
-        }
-
-        let decoder = JSONDecoder()
-        let payload: IPC.Message.Payload
-
-        do {
-            payload = try decoder.decode(IPC.Message.Payload.self, from: payloadData)
-        } catch let DecodingError.dataCorrupted(context) {
-            self.logger.error("Decoding Error: Data corrupted - \(context.debugDescription) at \(context.codingPath)")
-            return nil
-        } catch let DecodingError.keyNotFound(key, context) {
-            self.logger.error("Decoding Error: Key '\(key.stringValue)' not found - \(context.debugDescription) at \(context.codingPath)")
-            return nil
-        } catch let DecodingError.typeMismatch(type, context) {
-            self.logger.error("Decoding Error: Type '\(type)' mismatch - \(context.debugDescription) at \(context.codingPath)")
-            return nil
-        } catch let DecodingError.valueNotFound(value, context) {
-            self.logger.error("Decoding Error: Value '\(value)' not found - \(context.debugDescription) at \(context.codingPath)")
-            return nil
-        } catch {
-            self.logger.error("Failed to decode IPC message on FD \(fileDescriptor): \(error.localizedDescription)")
-            return nil
-        }
-
-        return IPC.Message(operationCode: operationCode, payload: payload)
     }
 
     /**
@@ -305,24 +331,22 @@ class DiscordRPCBridge: NSObject {
        - message: The IPC message received.
        - fileDescriptor: The client socket file descriptor.
      */
-    private func handleIPCMessage(_ message: IPC.Message, from fileDescriptor: Int32) {
-        guard let client = clients[fileDescriptor] else {
+    private func handleIPCMessage(_ message: IPC.Message, from fileDescriptor: Int32) async {
+        guard let client = await clientManager.getClient(fileDescriptor: fileDescriptor) else {
             self.logger.error("Client not found for FD \(fileDescriptor)")
             return
         }
 
         switch message.operationCode {
         case .handshake:
-            handleHandshake(payload: message.payload, from: fileDescriptor, client: client)
+            await handleHandshake(payload: message.payload, from: fileDescriptor, client: client)
         case .frame:
-            handleFrame(payload: message.payload, from: fileDescriptor, client: client)
+            await handleFrame(payload: message.payload, from: fileDescriptor, client: client)
         case .close:
-            socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
+            await socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
         case .ping:
-            handlePing(payload: message.payload, from: fileDescriptor)
+            await handlePing(payload: message.payload, from: fileDescriptor)
         case .pong:
-            fallthrough
-        default:
             self.logger.warning("Unhandled operation code: \(message.operationCode.rawValue) on FD \(fileDescriptor)")
         }
     }
@@ -335,18 +359,18 @@ class DiscordRPCBridge: NSObject {
        - fileDescriptor: The client socket file descriptor.
        - client: The client instance.
      */
-    private func handleHandshake(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
+    private func handleHandshake(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) async {
         self.logger.info("Handling handshake on FD \(fileDescriptor)")
 
         guard payload.version == 1 else {
             self.logger.error("Invalid or missing version in handshake on FD \(fileDescriptor)")
-            socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidVersion)
+            await socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidVersion)
             return
         }
 
         guard let clientID = payload.clientID, !clientID.isEmpty else {
             self.logger.error("Empty or missing client_id in handshake on FD \(fileDescriptor)")
-            socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidClientID)
+            await socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidClientID)
             return
         }
 
@@ -354,11 +378,8 @@ class DiscordRPCBridge: NSObject {
         client.isAcknowledged = true
         self.logger.info("Handshake successful for client \(clientID) on FD \(fileDescriptor) 👍🏾")
 
-        client.socketID = self.nextSocketID
-        self.nextSocketID += 1
-
         let acknowledgmentPayload = IPC.AcknowledgementPayload(version: 1, clientID: clientID)
-        send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
+        await send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
 
         let readyPayload = IPC.ReadyPayload(
             command: "DISPATCH",
@@ -382,7 +403,7 @@ class DiscordRPCBridge: NSObject {
             ),
             nonce: nil
         )
-        send(packet: readyPayload, operationCode: .frame, to: fileDescriptor)
+        await send(packet: readyPayload, operationCode: .frame, to: fileDescriptor)
     }
 
     /**
@@ -393,10 +414,10 @@ class DiscordRPCBridge: NSObject {
        - fileDescriptor: The client socket file descriptor.
        - client: The client instance.
      */
-    private func handleFrame(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
+    private func handleFrame(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) async {
         guard client.isAcknowledged else {
             self.logger.error("Received FRAME before handshake on FD \(fileDescriptor)")
-            socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
+            await socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
             return
         }
 
@@ -409,16 +430,16 @@ class DiscordRPCBridge: NSObject {
 
         switch command {
         case "SET_ACTIVITY":
-            handleSetActivity(payload: payload, from: fileDescriptor, client: client)
+            await handleSetActivity(payload: payload, from: fileDescriptor, client: client)
         case "INVITE_BROWSER", "GUILD_TEMPLATE_BROWSER":
-            handleInviteBrowser(arguments: payload.arguments, command: command, from: fileDescriptor)
+            await handleInviteBrowser(arguments: payload.arguments, command: command, from: fileDescriptor)
         case "DEEP_LINK":
-            respondSuccess(to: fileDescriptor, with: payload)
+            await respondSuccess(to: fileDescriptor, with: payload)
         case "CONNECTIONS_CALLBACK":
-            respondError(to: fileDescriptor, command: command, code: "Unhandled", nonce: payload.nonce)
+            await respondError(to: fileDescriptor, command: command, code: "Unhandled", nonce: payload.nonce)
         default:
             self.logger.warning("Unknown command: \(command) on FD \(fileDescriptor)")
-            respondSuccess(to: fileDescriptor, with: payload)
+            await respondSuccess(to: fileDescriptor, with: payload)
         }
     }
 
@@ -430,14 +451,13 @@ class DiscordRPCBridge: NSObject {
        - fileDescriptor: The client socket file descriptor.
        - client: The client instance.
      */
-    private func handleSetActivity(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
+    private func handleSetActivity(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) async {
         guard let arguments = payload.arguments, let activity = arguments.activity else {
             self.logger.warning("Missing arguments for SET_ACTIVITY on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
+            await respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
             return
         }
 
-        activityQueue.async {
             var updatedActivity = activity
             if updatedActivity.applicationID == nil, let clientID = client.clientID {
                 updatedActivity.applicationID = clientID
@@ -447,16 +467,15 @@ class DiscordRPCBridge: NSObject {
 
             guard let socketID = client.socketID else {
                 self.logger.error("No socketID found for FD \(fileDescriptor)")
-                self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketID", nonce: payload.nonce)
+                await self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketID", nonce: payload.nonce)
                 return
             }
 
             client.processID = arguments.processID
             client.socketID = socketID
 
-            self.injectActivity(activity: updatedActivity, processID: arguments.processID, socketID: socketID)
-            self.respondSuccess(to: fileDescriptor, with: payload)
-        }
+            await self.injectActivity(activity: updatedActivity, processID: arguments.processID, socketID: socketID)
+            await self.respondSuccess(to: fileDescriptor, with: payload)
     }
 
     /**
@@ -467,14 +486,14 @@ class DiscordRPCBridge: NSObject {
        - command: The command string.
        - fileDescriptor: The client socket file descriptor.
      */
-    private func handleInviteBrowser(arguments: IPC.Message.Payload.CommandArguments?, command: String, from fileDescriptor: Int32) {
+    private func handleInviteBrowser(arguments: IPC.Message.Payload.CommandArguments?, command: String, from fileDescriptor: Int32) async {
         guard let arguments = arguments, let code = arguments.code else {
             self.logger.warning("Missing code for command \(command) on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, command: command, code: "MissingCode", nonce: UUID().uuidString)
+            await respondError(to: fileDescriptor, command: command, code: "MissingCode", nonce: UUID().uuidString)
             return
         }
         self.logger.info("Command \(command) with code: \(code) on FD \(fileDescriptor)")
-        respondSuccess(to: fileDescriptor, with: IPC.Message.Payload(command: command, nonce: arguments.nonce, version: nil, clientID: nil, arguments: arguments))
+        await respondSuccess(to: fileDescriptor, with: IPC.Message.Payload(command: command, nonce: arguments.nonce, version: nil, clientID: nil, arguments: arguments))
     }
 
     /**
@@ -484,10 +503,10 @@ class DiscordRPCBridge: NSObject {
        - payload: The IPC message payload.
        - fileDescriptor: The client socket file descriptor.
      */
-    private func handlePing(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+    private func handlePing(payload: IPC.Message.Payload, from fileDescriptor: Int32) async {
         self.logger.info("Handling PING on FD \(fileDescriptor)")
         let pongPayload = IPC.PongPayload(nonce: payload.nonce)
-        send(packet: pongPayload, operationCode: .pong, to: fileDescriptor)
+        await send(packet: pongPayload, operationCode: .pong, to: fileDescriptor)
     }
 
     // MARK: - Packet Handling
@@ -500,7 +519,7 @@ class DiscordRPCBridge: NSObject {
        - operationCode: The operation code.
        - fileDescriptor: The socket file descriptor.
      */
-    private func send<T: Codable>(packet: T, operationCode: IPC.OperationCode, to fileDescriptor: Int32) {
+    private func send<T: Codable>(packet: T, operationCode: IPC.OperationCode, to fileDescriptor: Int32) async {
         let encoder = JSONEncoder()
         guard let jsonData = try? encoder.encode(packet) else {
             self.logger.error("Failed to serialize payload to JSON")
@@ -514,7 +533,7 @@ class DiscordRPCBridge: NSObject {
         buffer.append(Data(bytes: &dataSizeLittleEndian, count: 4))
         buffer.append(jsonData)
 
-        write(to: fileDescriptor, data: buffer)
+        await write(to: fileDescriptor, data: buffer)
     }
 
     /**
@@ -524,7 +543,7 @@ class DiscordRPCBridge: NSObject {
        - fileDescriptor: The socket file descriptor.
        - data: The data to send.
      */
-    private func write(to fileDescriptor: Int32, data: Data) {
+    private func write(to fileDescriptor: Int32, data: Data) async {
         data.withUnsafeBytes { pointer in
             guard let baseAddress = pointer.baseAddress else {
                 self.logger.error("Failed to get base address of data")
@@ -546,7 +565,7 @@ class DiscordRPCBridge: NSObject {
        - fileDescriptor: The client socket file descriptor.
        - payload: The original IPC message payload.
      */
-    private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.Message.Payload) {
+    private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.Message.Payload) async {
         if payload.command == nil {
             self.logger.warning("Command unknown; response body will be empty")
         }
@@ -558,7 +577,7 @@ class DiscordRPCBridge: NSObject {
             nonce: payload.nonce
         )
         self.logger.info("Responding with success: \(String(describing: response))")
-        send(packet: response, operationCode: .frame, to: fileDescriptor)
+        await send(packet: response, operationCode: .frame, to: fileDescriptor)
     }
 
     /**
@@ -570,7 +589,7 @@ class DiscordRPCBridge: NSObject {
        - code: The error code.
        - nonce: The nonce associated with the request.
      */
-    private func respondError(to fileDescriptor: Int32, command: String, code: String, nonce: String?) {
+    private func respondError(to fileDescriptor: Int32, command: String, code: String, nonce: String?) async {
         let errorMessage = IPC.ErrorResponse(
             command: command,
             event: "ERROR",
@@ -578,7 +597,7 @@ class DiscordRPCBridge: NSObject {
             nonce: nonce
         )
         self.logger.warning("Sending error response for cmd \(command) with code \(code) on FD \(fileDescriptor)")
-        send(packet: errorMessage, operationCode: .frame, to: fileDescriptor)
+        await send(packet: errorMessage, operationCode: .frame, to: fileDescriptor)
     }
 
     // MARK: - Activity Injection
@@ -591,7 +610,7 @@ class DiscordRPCBridge: NSObject {
        - processID: The process ID.
        - socketID: The socket ID.
      */
-    private func injectActivity(activity: DiscordRPCBridge.Activity, processID: Int, socketID: Int) {
+    private func injectActivity(activity: DiscordRPCBridge.Activity, processID: Int, socketID: Int) async {
         guard let activityJSON = try? JSONEncoder().encode(activity),
               let activityString = String(data: activityJSON, encoding: .utf8),
               let webView = webView else {
@@ -749,7 +768,7 @@ class DiscordRPCBridge: NSObject {
        - processID: The process ID.
        - socketID: The socket ID.
      */
-    private func clearActivity(processID: Int, socketID: Int) {
+    private func clearActivity(processID: Int, socketID: Int) async {
         guard let webView = webView else { return }
 
         let clearScript = """
@@ -819,23 +838,22 @@ class DiscordRPCBridge: NSObject {
        - code: The closure code.
        - message: The closure message.
      */
-    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode, message: String? = nil) {
+    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode, message: String? = nil) async {
         self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
-        activityQueue.async {
-            if let client = self.clients[fileDescriptor], let processID = client.processID, let socketID = client.socketID {
-                self.clearActivity(processID: processID, socketID: socketID)
-            }
-
-            let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-            self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
-
-            self.clients.removeValue(forKey: fileDescriptor)
-            self.clientSockets.remove(fileDescriptor)
-
-            close(fileDescriptor)
-            self.logger.info("Socket closed on FD \(fileDescriptor)")
+        if let client = await clientManager.getClient(fileDescriptor: fileDescriptor),
+           let processID = client.processID,
+           let socketID = client.socketID {
+            await clearActivity(processID: processID, socketID: socketID)
         }
+
+        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+        await send(packet: closePayload, operationCode: .close, to: fileDescriptor)
+
+        await clientManager.removeClient(fileDescriptor: fileDescriptor)
+
+        close(fileDescriptor)
+        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
 }
 
