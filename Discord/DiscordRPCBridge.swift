@@ -51,13 +51,13 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
     func startBridge(for webView: WKWebView) {
         self.webView = webView
         self.logger.info("Starting DiscordRPCBridge")
-        setupIPCServer()
+        initialiseRPCServer()
     }
 
     // MARK: - IPC Server Setup
 
     /// Sets up the IPC server by creating and binding Unix Domain Sockets.
-    private func setupIPCServer() {
+    private func initialiseRPCServer() {
         DispatchQueue.global(qos: .background).async {
             self.logger.info("Setting up IPC servers")
             guard let temporaryDirectory = ProcessInfo.processInfo.environment["TMPDIR"] else {
@@ -71,12 +71,12 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
                 self.logger.debug("Attempting to bind to socket path: \(socketPath)")
 
-                guard self.prepareSocket(at: socketPath) else { continue }
+                guard self.prepareSocket(atPath: socketPath) else { continue }
 
-                let fileDescriptor = UnixDomainSocket.create(at: socketPath)
+                let fileDescriptor = UnixDomainSocket.create(atPath: socketPath)
                 guard fileDescriptor >= 0 else { continue }
 
-                if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, to: socketPath) {
+                if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
                     UnixDomainSocket.listen(on: fileDescriptor)
                     self.serverSockets.append(fileDescriptor)
                     self.acceptConnections(on: fileDescriptor)
@@ -104,16 +104,16 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - Parameter path: The socket file path.
      - Returns: `true` if the socket is in use, otherwise `false`.
      */
-    private func isSocketInUse(at path: String) -> Bool {
+    private func isSocketInUse(atPath path: String) -> Bool {
         guard FileManager.default.fileExists(atPath: path) else { return false }
-        let testSocketFileDescriptor = UnixDomainSocket.create(at: path)
+        let testSocketFileDescriptor = UnixDomainSocket.create(atPath: path)
         defer { close(testSocketFileDescriptor) }
 
         if testSocketFileDescriptor < 0 {
             return true
         }
 
-        let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFileDescriptor, to: path)
+        let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFileDescriptor, toPath: path)
         if inUse {
             self.logger.info("Socket \(path) is already in use")
         } else {
@@ -128,8 +128,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - Parameter path: The socket file path.
      - Returns: `true` if preparation is successful, otherwise `false`.
      */
-    private func prepareSocket(at path: String) -> Bool {
-        if isSocketInUse(at: path) {
+    private func prepareSocket(atPath path: String) -> Bool {
+        if isSocketInUse(atPath: path) {
             self.logger.error("Socket \(path) is already in use; skipping removal.")
             return false
         }
@@ -180,7 +180,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      */
     private func handleClient(_ fileDescriptor: Int32) {
         self.logger.debug("Handling client on FD \(fileDescriptor)")
-        readLoop(fileDescriptor: fileDescriptor)
+        startReadLoop(on: fileDescriptor)
     }
 
     /**
@@ -188,9 +188,11 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
      - Parameter fileDescriptor: The client socket file descriptor.
      */
-    private func readLoop(fileDescriptor: Int32) {
+    private func startReadLoop(on fileDescriptor: Int32) {
         self.logger.debug("Starting read loop on FD \(fileDescriptor)")
         let bufferSize = 65536
+
+        defer { self.logger.debug("Read loop terminated on FD \(fileDescriptor)") }
 
         while true {
             guard let message = readMessage(from: fileDescriptor, bufferSize: bufferSize) else {
@@ -301,13 +303,13 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
     private func handleIPCMessage(_ message: IPC.Message, from fileDescriptor: Int32) {
         switch message.operationCode {
         case .handshake:
-            handleHandshake(with: message.payload, from: fileDescriptor)
+            handleHandshake(payload: message.payload, from: fileDescriptor)
         case .frame:
-            handleFrame(with: message.payload, from: fileDescriptor)
+            handleFrame(payload: message.payload, from: fileDescriptor)
         case .close:
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
         case .ping:
-            handlePing(with: message.payload, from: fileDescriptor)
+            handlePing(payload: message.payload, from: fileDescriptor)
         case .pong:
             fallthrough
         default:
@@ -322,51 +324,51 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleHandshake(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
-        self.logger.info("Handling HANDSHAKE on FD \(fileDescriptor)")
+    private func handleHandshake(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+        self.logger.info("Handling handshake on FD \(fileDescriptor)")
 
-        guard payload.v == 1 else {
+        guard payload.version == 1 else {
             self.logger.error("Invalid or missing version in handshake on FD \(fileDescriptor)")
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidVersion)
             return
         }
 
-        guard let clientId = payload.client_id, !clientId.isEmpty else {
+        guard let clientID = payload.clientID, !clientID.isEmpty else {
             self.logger.error("Empty or missing client_id in handshake on FD \(fileDescriptor)")
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ErrorCode.invalidClientID)
             return
         }
 
-        clientIds[fileDescriptor] = clientId
+        clientIds[fileDescriptor] = clientID
         clientHandshakes[fileDescriptor] = true
-        self.logger.info("Handshake successful for client \(clientId) on FD \(fileDescriptor)")
+        self.logger.info("Handshake successful for client \(clientID) on FD \(fileDescriptor) 👍🏾")
 
-        let acknowledgmentPayload = IPC.AcknowledgementPayload(v: 1, client_id: clientId)
-        send(packet: acknowledgmentPayload, op: .handshake, to: fileDescriptor)
+        let acknowledgmentPayload = IPC.AcknowledgementPayload(version: 1, clientID: clientID)
+        send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
 
         let readyPayload = IPC.ReadyPayload(
-            cmd: "DISPATCH",
+            command: "DISPATCH",
+            event: "READY",
             data: IPC.ReadyPayload.ReadyData(
-                v: 1,
-                config: IPC.ReadyPayload.ReadyConfig(
-                    cdn_host: "cdn.discordapp.com",
-                    api_endpoint: "//discord.com/api",
+                version: 1,
+                configuration: IPC.ReadyPayload.ReadyConfig(
+                    cdnHost: "cdn.discordapp.com",
+                    apiEndpoint: "//discord.com/api",
                     environment: "production"
                 ),
-                user: IPC.ReadyPayload.User(
+                user: User(
                     id: "1045800378228281345",
                     username: "arrpc",
                     discriminator: "0",
-                    global_name: "arRPC",
+                    globalName: "arRPC",
                     avatar: "cfefa4d9839fb4bdf030f91c2a13e95c",
                     bot: false,
                     flags: 0
                 )
             ),
-            evt: "READY",
             nonce: nil
         )
-        send(packet: readyPayload, op: .frame, to: fileDescriptor)
+        send(packet: readyPayload, operationCode: .frame, to: fileDescriptor)
     }
 
     /**
@@ -376,14 +378,14 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleFrame(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+    private func handleFrame(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         guard clientHandshakes[fileDescriptor] == true else {
             self.logger.error("Received FRAME before handshake on FD \(fileDescriptor)")
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
             return
         }
 
-        guard let command = payload.cmd else {
+        guard let command = payload.command else {
             self.logger.error("Missing 'cmd' in FRAME on FD \(fileDescriptor)")
             return
         }
@@ -392,13 +394,13 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
         switch command {
         case "SET_ACTIVITY": /// https://discord.com/developers/docs/topics/rpc#setactivity
-            handleSetActivity(with: payload, from: fileDescriptor)
+            handleSetActivity(payload: payload, from: fileDescriptor)
         case "INVITE_BROWSER", "GUILD_TEMPLATE_BROWSER":
-            handleInviteBrowser(with: payload.args, cmd: command, from: fileDescriptor)
+            handleInviteBrowser(arguments: payload.arguments, command: command, from: fileDescriptor)
         case "DEEP_LINK":
             respondSuccess(to: fileDescriptor, with: payload)
         case "CONNECTIONS_CALLBACK":
-            respondError(to: fileDescriptor, cmd: command, code: "Unhandled", nonce: payload.nonce)
+            respondError(to: fileDescriptor, command: command, code: "Unhandled", nonce: payload.nonce)
         default:
             self.logger.warning("Unknown command: \(command) on FD \(fileDescriptor)")
             respondSuccess(to: fileDescriptor, with: payload)
@@ -412,10 +414,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleSetActivity(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
-        guard let arguments = payload.args else {
+    private func handleSetActivity(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+        guard let arguments = payload.arguments else {
             self.logger.warning("Missing arguments for SET_ACTIVITY on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, cmd: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
+            respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
             return
         }
 
@@ -442,12 +444,12 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 self.respondSuccess(to: fileDescriptor, with: payload)
             } else {
                 /*
-                if let existingActivity = self.clientActivity[fileDescriptor] {
-                    self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
-                    self.clientActivity.removeValue(forKey: fileDescriptor)
-                    self.logger.info("Cleared activity for FD \(fileDescriptor)")
-                }
-                self.respondSuccess(to: fileDescriptor, with: payload)
+                 if let existingActivity = self.clientActivity[fileDescriptor] {
+                 self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
+                 self.clientActivity.removeValue(forKey: fileDescriptor)
+                 self.logger.info("Cleared activity for FD \(fileDescriptor)")
+                 }
+                 self.respondSuccess(to: fileDescriptor, with: payload)
                  */
             }
         }
@@ -461,14 +463,14 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - cmd: The command string.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handleInviteBrowser(with args: IPC.Message.Payload.CommandArgs?, cmd: String, from fileDescriptor: Int32) {
-        guard let arguments = args, let code = arguments.code else {
-            self.logger.warning("Missing code for command \(cmd) on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, cmd: cmd, code: "MissingCode", nonce: UUID().uuidString /* cannot use the same nonce! */)
+    private func handleInviteBrowser(arguments: IPC.Message.Payload.CommandArguments?, command: String, from fileDescriptor: Int32) {
+        guard let arguments = arguments, let code = arguments.code else {
+            self.logger.warning("Missing code for command \(command) on FD \(fileDescriptor)")
+            respondError(to: fileDescriptor, command: command, code: "MissingCode", nonce: UUID().uuidString /* cannot use the same nonce! */)
             return
         }
-        self.logger.info("Command \(cmd) with code: \(code) on FD \(fileDescriptor)")
-        respondSuccess(to: fileDescriptor, with: IPC.Message.Payload(cmd: cmd, nonce: arguments.nonce, v: nil, client_id: nil, args: arguments))
+        self.logger.info("Command \(command) with code: \(code) on FD \(fileDescriptor)")
+        respondSuccess(to: fileDescriptor, with: IPC.Message.Payload(command: command, nonce: arguments.nonce, version: nil, clientID: nil, arguments: arguments))
     }
 
     /**
@@ -478,10 +480,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The IPC message payload.
      - fileDescriptor: The client socket file descriptor.
      */
-    private func handlePing(with payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+    private func handlePing(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         self.logger.info("Handling PING on FD \(fileDescriptor)")
         let pongPayload = IPC.PongPayload(nonce: payload.nonce)
-        send(packet: pongPayload, op: .pong, to: fileDescriptor)
+        send(packet: pongPayload, operationCode: .pong, to: fileDescriptor)
     }
 
     // MARK: - Packet Handling
@@ -494,7 +496,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - operationCode: The operation code.
      - fileDescriptor: The socket file descriptor.
      */
-    private func send<T: Codable>(packet: T, op operationCode: IPC.OperationCode, to fileDescriptor: Int32) {
+    private func send<T: Codable>(packet: T, operationCode: IPC.OperationCode, to fileDescriptor: Int32) {
         let encoder = JSONEncoder()
         guard let jsonData = try? encoder.encode(packet) else {
             self.logger.error("Failed to serialize payload to JSON")
@@ -541,18 +543,18 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - payload: The original IPC message payload.
      */
     private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.Message.Payload) {
-        if payload.cmd == nil {
+        if payload.command == nil {
             self.logger.warning("Command unknown; response body will be empty")
         }
 
         let response = IPC.SuccessResponse(
-            cmd: payload.cmd ?? "",
-            evt: nil,
+            command: payload.command ?? "",
+            event: nil,
             data: nil,
             nonce: payload.nonce
         )
         self.logger.info("Responding with success: \(String(describing: response))")
-        send(packet: response, op: .frame, to: fileDescriptor)
+        send(packet: response, operationCode: .frame, to: fileDescriptor)
     }
 
     /**
@@ -564,15 +566,15 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - code: The error code.
      - nonce: The nonce associated with the request.
      */
-    private func respondError(to fileDescriptor: Int32, cmd: String, code: String, nonce: String?) {
+    private func respondError(to fileDescriptor: Int32, command: String, code: String, nonce: String?) {
         let errorMessage = IPC.ErrorResponse(
-            cmd: cmd,
-            evt: "ERROR",
+            command: command,
+            event: "ERROR",
             data: IPC.ErrorResponse.ErrorData(code: 4011, message: "Invalid invite or template id: \(code)"),
             nonce: nonce
         )
-        self.logger.warning("Sending error response for cmd \(cmd) with code \(code) on FD \(fileDescriptor)")
-        send(packet: errorMessage, op: .frame, to: fileDescriptor)
+        self.logger.warning("Sending error response for cmd \(command) with code \(code) on FD \(fileDescriptor)")
+        send(packet: errorMessage, operationCode: .frame, to: fileDescriptor)
     }
 
     // MARK: - Activity Injection
@@ -828,7 +830,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - code: The closure code.
      - message: The closure message.
      */
-    private func socketClose(fileDescriptor: Int32, code: IPC.IPCError, message: String? = nil) {
+    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode /* conformance sake */, message: String? = nil) {
         self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
         activityQueue.async {
@@ -838,7 +840,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             }
 
             let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-            self.send(packet: closePayload, op: .close, to: fileDescriptor)
+            self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
 
             self.clientHandshakes.removeValue(forKey: fileDescriptor)
             self.clientIds.removeValue(forKey: fileDescriptor)
@@ -856,7 +858,7 @@ extension DiscordRPCBridge {
     /// Namespace for IPC related structures and enums.
     struct IPC {
         /// Protocol defining IPC errors with raw values and descriptions.
-        protocol IPCError {
+        protocol ResponseCode {
             var rawValue: Int { get }
             var description: String { get }
         }
@@ -869,46 +871,49 @@ extension DiscordRPCBridge {
             /// Structure representing the payload of an IPC message.
             /// https://discord.com/developers/docs/topics/rpc#payloads-payload-structure
             struct Payload: Codable {
-                let cmd: String?
+                let command: String?
                 let nonce: String?
-                let v: Int?
-                let client_id: String?
-                let args: CommandArgs?
+                let version: Int?
+                let clientID: String?
+                let arguments: CommandArguments?
 
                 enum CodingKeys: String, CodingKey {
-                    case cmd, nonce, v, client_id, args
+                    case command = "cmd"
+                    case nonce
+                    case version = "v"
+                    case clientID = "client_id"
+                    case arguments = "args"
                 }
 
-                init(cmd: String?, nonce: String?, v: Int?, client_id: String?, args: CommandArgs?) {
-                    self.cmd = cmd
+                init(command: String?, nonce: String?, version: Int?, clientID: String?, arguments: CommandArguments?) {
+                    self.command = command
                     self.nonce = nonce
-                    self.v = v
-                    self.client_id = client_id
-                    self.args = args
+                    self.version = version
+                    self.clientID = clientID
+                    self.arguments = arguments
                 }
 
                 init(from decoder: Decoder) throws {
                     let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.cmd = try container.decodeIfPresent(String.self, forKey: .cmd)
+                    self.command = try container.decodeIfPresent(String.self, forKey: .command)
                     self.nonce = try container.decodeIfPresent(String.self, forKey: .nonce)
 
-                    // Handle different types for 'v'
-                    if let intValue = try? container.decode(Int.self, forKey: .v) {
-                        self.v = intValue
-                    } else if let stringValue = try? container.decode(String.self, forKey: .v),
+                    if let intValue = try? container.decode(Int.self, forKey: .version) {
+                        self.version = intValue
+                    } else if let stringValue = try? container.decode(String.self, forKey: .version),
                               let intValue = Int(stringValue) {
-                        self.v = intValue
+                        self.version = intValue
                     } else {
-                        self.v = nil
+                        self.version = nil
                     }
 
-                    self.client_id = try container.decodeIfPresent(String.self, forKey: .client_id)
-                    self.args = try container.decodeIfPresent(CommandArgs.self, forKey: .args)
+                    self.clientID = try container.decodeIfPresent(String.self, forKey: .clientID)
+                    self.arguments = try container.decodeIfPresent(CommandArguments.self, forKey: .arguments)
                 }
 
                 /// Structure representing command arguments within the payload.
                 /// https://discord.com/developers/docs/topics/rpc#setactivity-set-activity-argument-structure
-                struct CommandArgs: Codable {
+                struct CommandArguments: Codable {
                     let pid: Int
                     let activity: Activity?
 
@@ -921,37 +926,51 @@ extension DiscordRPCBridge {
 
         /// Structure representing an acknowledgment payload.
         struct AcknowledgementPayload: Codable {
-            let v: Int
-            let client_id: String
+            let version: Int
+            let clientID: String
+
+            enum CodingKeys: String, CodingKey {
+                case version = "v"
+                case clientID = "client_id"
+            }
         }
 
         /// Structure representing a ready payload.
         struct ReadyPayload: Codable {
-            let cmd: String
+            let command: String
+            let event: String
             let data: ReadyData
-            let evt: String
             let nonce: String?
 
+            enum CodingKeys: String, CodingKey {
+                case command = "cmd"
+                case event = "evt"
+                case data
+                case nonce
+            }
+
             struct ReadyData: Codable {
-                let v: Int
-                let config: ReadyConfig
+                let version: Int
+                let configuration: ReadyConfig
                 let user: User
+
+                enum CodingKeys: String, CodingKey {
+                    case version = "v"
+                    case configuration = "config"
+                    case user
+                }
             }
 
             struct ReadyConfig: Codable {
-                let cdn_host: String
-                let api_endpoint: String
+                let cdnHost: String
+                let apiEndpoint: String
                 let environment: String
-            }
 
-            struct User: Codable {
-                let id: String
-                let username: String
-                let discriminator: String
-                let global_name: String
-                let avatar: String
-                let bot: Bool
-                let flags: Int
+                enum CodingKeys: String, CodingKey {
+                    case cdnHost = "cdn_host"
+                    case apiEndpoint = "api_endpoint"
+                    case environment
+                }
             }
         }
 
@@ -961,23 +980,37 @@ extension DiscordRPCBridge {
         }
 
         protocol Response: Codable {
-            var cmd: String { get }
+            var command: String { get }
         }
 
         /// Structure representing a successful response.
         struct SuccessResponse: Codable, Response {
-            let cmd: String
-            let evt: String?
+            let command: String
+            let event: String?
             let data: String?
             let nonce: String?
+
+            enum CodingKeys: String, CodingKey {
+                case command = "cmd"
+                case event = "evt"
+                case data
+                case nonce
+            }
         }
 
         /// Structure representing an error response.
         struct ErrorResponse: Codable, Response {
-            let cmd: String
-            let evt: String
+            let command: String
+            let event: String
             let data: ErrorData
             let nonce: String?
+
+            enum CodingKeys: String, CodingKey {
+                case command = "cmd"
+                case event = "evt"
+                case data
+                case nonce
+            }
 
             struct ErrorData: Codable {
                 let code: Int
@@ -1018,7 +1051,7 @@ extension DiscordRPCBridge {
 
         // ?? arRPC had it tho
         /// Enum representing closure codes for IPC.
-        enum ClosureCode: Int, IPCError {
+        enum ClosureCode: Int, ResponseCode {
             case normal = 1000
             case unsupported = 1003
             case abnormal = 1006
@@ -1037,7 +1070,7 @@ extension DiscordRPCBridge {
 
         /// Enum representing error codes for IPC.
         /// https://discord.com/developers/docs/topics/opcodes-and-status-codes#rpc-rpc-close-event-codes
-        enum ErrorCode: Int, IPCError {
+        enum ErrorCode: Int, ResponseCode {
             case invalidClientID = 4000
             case invalidOrigin = 4001
             case ratelimited = 4002
@@ -1064,6 +1097,28 @@ extension DiscordRPCBridge {
         }
     }
 
+    /// Structure representing a user.
+    /// https://discord.com/developers/docs/resources/user#user-object
+    struct User: Codable, Identifiable {
+        let id: String
+        let username: String
+        let discriminator: String
+        let globalName: String
+        let avatar: String
+        let bot: Bool
+        let flags: Int
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case username
+            case discriminator
+            case globalName = "global_name"
+            case avatar
+            case bot
+            case flags
+        }
+    }
+
     /// Structure representing an activity.
     /// https://discord.com/developers/docs/events/gateway-events#activity-object
     struct Activity: Codable {
@@ -1084,7 +1139,21 @@ extension DiscordRPCBridge {
         var flags: Int?
 
         enum CodingKeys: String, CodingKey {
-            case name, type, url, createdAt = "created_at", timestamps, applicationID = "application_id", details, state, emoji, party, assets, buttons, secrets, instance, flags
+            case name
+            case type
+            case url
+            case createdAt = "created_at"
+            case timestamps
+            case applicationID = "application_id"
+            case details
+            case state
+            case emoji
+            case party
+            case assets
+            case buttons
+            case secrets
+            case instance
+            case flags
         }
 
         /// Custom initializer to handle missing keys gracefully.
@@ -1174,7 +1243,7 @@ extension DiscordRPCBridge {
          - Parameter path: The socket file path.
          - Returns: The file descriptor of the created socket, or a negative value on failure.
          */
-        static func create(at path: String) -> Int32 {
+        static func create(atPath path: String) -> Int32 {
             let fileDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
             if fileDescriptor < 0 {
                 self.logger.error("Failed to create socket at \(path)")
@@ -1199,7 +1268,7 @@ extension DiscordRPCBridge {
          - path: The socket file path.
          - Returns: `true` if the connection is successful, otherwise `false`.
          */
-        static func connect(fileDescriptor: Int32, to path: String) -> Bool {
+        static func connect(fileDescriptor: Int32, toPath path: String) -> Bool {
             var address = sockaddr_un()
             address.sun_family = sa_family_t(AF_UNIX)
             strncpy(&address.sun_path.0, path, MemoryLayout.size(ofValue: address.sun_path) - 1)
@@ -1225,7 +1294,7 @@ extension DiscordRPCBridge {
          - path: The socket file path.
          - Returns: `true` if binding is successful, otherwise `false`.
          */
-        static func bind(fileDescriptor: Int32, to path: String) -> Bool {
+        static func bind(fileDescriptor: Int32, toPath path: String) -> Bool {
             var address = sockaddr_un()
             address.sun_family = sa_family_t(AF_UNIX)
             strncpy(&address.sun_path.0, path, MemoryLayout.size(ofValue: address.sun_path) - 1)
