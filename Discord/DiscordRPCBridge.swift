@@ -13,49 +13,8 @@ import SwiftUI
 /**
  A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
  It sets up a Unix Domain Socket server to listen for Discord IPC connections.
- Thank you @vapidinfinity 🙏🏾
+ HUGE thank you to @vapidinfinity, go checkout Mythic 🙏🏾 (self glaze)
  */
-actor ClientManager {
-    private var clients = [Int32: DiscordRPCBridge.Client]()
-    private var clientSockets = Set<Int32>()
-    private var nextSocketID = 1
-
-    /// Adds a new client and returns it.
-    func addClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client {
-        let client = DiscordRPCBridge.Client(fileDescriptor: fileDescriptor)
-        clients[fileDescriptor] = client
-        clientSockets.insert(fileDescriptor)
-        client.socketID = nextSocketID
-        nextSocketID += 1
-        return client
-    }
-
-    /// Retrieves a client by its file descriptor.
-    func getClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client? {
-        return clients[fileDescriptor]
-    }
-
-    /// Removes a client and closes its socket.
-    func removeClient(fileDescriptor: Int32) {
-        clients.removeValue(forKey: fileDescriptor)
-        clientSockets.remove(fileDescriptor)
-        close(fileDescriptor)
-    }
-
-    /// Closes all client sockets, used during deinitialization.
-    func closeAllClients() {
-        for fd in clientSockets {
-            close(fd)
-        }
-        clients.removeAll()
-        clientSockets.removeAll()
-    }
-
-    var allClientSockets: Set<Int32> {
-        return clientSockets
-    }
-}
-
 class DiscordRPCBridge: NSObject {
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
@@ -80,6 +39,46 @@ class DiscordRPCBridge: NSObject {
             self.fileDescriptor = fileDescriptor
         }
     }
+    actor ClientManager {
+        private var clients = [Int32: DiscordRPCBridge.Client]()
+        private var clientSockets = Set<Int32>()
+        private var nextSocketID = 1
+
+        /// Adds a new client and returns it.
+        func addClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client {
+            let client = DiscordRPCBridge.Client(fileDescriptor: fileDescriptor)
+            clients[fileDescriptor] = client
+            clientSockets.insert(fileDescriptor)
+            client.socketID = nextSocketID
+            nextSocketID += 1
+            return client
+        }
+
+        /// Retrieves a client by its file descriptor.
+        func getClient(fileDescriptor: Int32) -> DiscordRPCBridge.Client? {
+            return clients[fileDescriptor]
+        }
+
+        /// Removes a client and closes its socket.
+        func removeClient(fileDescriptor: Int32) {
+            clients.removeValue(forKey: fileDescriptor)
+            clientSockets.remove(fileDescriptor)
+            close(fileDescriptor)
+        }
+
+        /// Closes all client sockets, used during deinitialization.
+        func closeAllClients() {
+            for fd in clientSockets {
+                close(fd)
+            }
+            clients.removeAll()
+            clientSockets.removeAll()
+        }
+
+        var allClientSockets: Set<Int32> {
+            return clientSockets
+        }
+    }
 
     private let activityQueue = DispatchQueue(label: "activityQueue")
 
@@ -87,7 +86,6 @@ class DiscordRPCBridge: NSObject {
 
     static let shared = DiscordRPCBridge()
 
-    /// Initializes the DiscordRPCBridge with the base path for Unix Domain Sockets.
     private override init() {
         super.init()
     }
