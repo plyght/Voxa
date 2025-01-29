@@ -724,7 +724,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                     type: 'LOCAL_ACTIVITY_UPDATE',
                     activity: activity,
                     pid: \(pid),
-                    socketId: "\(socketId)"
+                    socket_id: "\(socketId)"
                 });
                 console.info("Activity dispatched successfully:", activity);
             } catch (e) {
@@ -793,7 +793,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                         type: 'LOCAL_ACTIVITY_UPDATE',
                         activity: null,
                         pid: \(pid),
-                        socketId: "\(socketId)"
+                        socket_id: "\(socketId)"
                     });
                     console.info("Activity cleared successfully");
                 } catch (error) {
