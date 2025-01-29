@@ -422,8 +422,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         activityQueue.async {
             if var activity = arguments.activity {
                 // 1. Copy application_id from handshake or use existing
-                if activity.applicationId == nil, let clientID = self.clientIds[fileDescriptor] {
-                    activity.applicationId = clientID
+                if activity.applicationID == nil, let clientID = self.clientIds[fileDescriptor] {
+                    activity.applicationID = clientID
                 }
 
                 // 2. Set the name based on application_id if it's still "Unknown Activity"
@@ -441,12 +441,14 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 self.injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
                 self.respondSuccess(to: fileDescriptor, with: payload)
             } else {
+                /*
                 if let existingActivity = self.clientActivity[fileDescriptor] {
                     self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
                     self.clientActivity.removeValue(forKey: fileDescriptor)
                     self.logger.info("Cleared activity for FD \(fileDescriptor)")
                 }
                 self.respondSuccess(to: fileDescriptor, with: payload)
+                 */
             }
         }
     }
@@ -1068,9 +1070,9 @@ extension DiscordRPCBridge {
         var name: String
         let type: Int
         let url: String?
-        let createdAt: Int
+        var createdAt: Int
         var timestamps: Timestamps?
-        var applicationId: String?
+        var applicationID: String?
         var details: String?
         var state: String?
         var emoji: Emoji?
@@ -1082,7 +1084,7 @@ extension DiscordRPCBridge {
         var flags: Int?
 
         enum CodingKeys: String, CodingKey {
-            case name, type, url, createdAt = "created_at", timestamps, applicationId = "application_id", details, state, emoji, party, assets, buttons, secrets, instance, flags
+            case name, type, url, createdAt = "created_at", timestamps, applicationID = "application_id", details, state, emoji, party, assets, buttons, secrets, instance, flags
         }
 
         /// Custom initializer to handle missing keys gracefully.
@@ -1092,12 +1094,12 @@ extension DiscordRPCBridge {
             // Non-optionals
             self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Unknown Activity"
             self.type = try container.decodeIfPresent(Int.self, forKey: .type) ?? 0
-            self.createdAt = try container.decodeIfPresent(Int.self, forKey: .createdAt) ?? Int(Date().timeIntervalSince1970)
+            self.createdAt = try container.decodeIfPresent(Int.self, forKey: .createdAt) ?? Int((Date().timeIntervalSince1970 * 1000 /* ms */).rounded())
 
             // Optionals
             self.url = try container.decodeIfPresent(String.self, forKey: .url)
             self.timestamps = try container.decodeIfPresent(Timestamps.self, forKey: .timestamps)
-            self.applicationId = try container.decodeIfPresent(String.self, forKey: .applicationId)
+            self.applicationID = try container.decodeIfPresent(String.self, forKey: .applicationID)
             self.details = try container.decodeIfPresent(String.self, forKey: .details)
             self.state = try container.decodeIfPresent(String.self, forKey: .state)
             self.emoji = try container.decodeIfPresent(Emoji.self, forKey: .emoji)
