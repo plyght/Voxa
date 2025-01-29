@@ -14,7 +14,7 @@ import SwiftUI
  A Swift class emulating arRPC stage 1 (node IPC) directly in Swift.
  It sets up a Unix Domain Socket server to listen for Discord IPC connections.
  */
-class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the implementation
+class DiscordRPCBridge: NSObject {
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "lol.peril.Voxa",
         category: "discordRPCBridge"
@@ -22,19 +22,27 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
     private weak var webView: WKWebView?
 
-    private var serverSockets: [Int32] = []
-    private var clientSockets: [Int32] = []
+    private var serverSockets = Set<Int32>()
+    private var clientSockets = Set<Int32>()
 
-    private var nextSocketId: Int = 1
-    private var activitySocketCounter: Int = 0
+    private var nextSocketId = 1
+    private var clients = [Int32: Client]()
+    private class Client {
+        let fileDescriptor: Int32
+        var isAcknowledged: Bool = false
+        var clientID: String?
+        var socketId: Int?
+        var pid: Int = 0
+        var activity: (pid: Int, socketId: Int)?
 
-    private var clientHandshakes: [Int32: Bool] = [:]
-    private var clientIds: [Int32: String] = [:]
-    private var clientActivity: [Int32: (pid: Int, socketId: Int)] = [:]
+        init(fileDescriptor: Int32) {
+            self.fileDescriptor = fileDescriptor
+        }
+    }
 
     private let activityQueue = DispatchQueue(label: "activityQueue")
 
-    private var isServerReady: Bool = false
+    private var isServerReady = false
 
     static let shared = DiscordRPCBridge()
 
@@ -67,8 +75,6 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 return
             }
 
-            var bound = false
-
             for socketIndex in 0..<10 {
                 let socketPath = "\(temporaryDirectory)discord-ipc-\(socketIndex)"
                 self.logger.debug("Attempting to bind to socket path: \(socketPath)")
@@ -80,10 +86,11 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
                 if UnixDomainSocket.bind(fileDescriptor: fileDescriptor, toPath: socketPath) {
                     UnixDomainSocket.listen(on: fileDescriptor)
-                    self.serverSockets.append(fileDescriptor)
+                    self.serverSockets.insert(fileDescriptor)
                     self.acceptConnections(on: fileDescriptor)
                     self.logger.info("IPC server successfully bound to and listening on \(socketPath)")
-                    bound = true
+                    self.isServerReady = true
+                    self.logger.info("IPC server is ready to accept connections.")
                     break
                 } else {
                     close(fileDescriptor)
@@ -91,10 +98,7 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                 }
             }
 
-            if bound {
-                self.isServerReady = true
-                self.logger.info("IPC server is ready to accept connections.")
-            } else {
+            if self.serverSockets.isEmpty {
                 self.logger.error("Failed to bind to any IPC sockets from discord-ipc-0 to discord-ipc-9")
             }
         }
@@ -108,19 +112,15 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      */
     private func isSocketInUse(atPath path: String) -> Bool {
         guard FileManager.default.fileExists(atPath: path) else { return false }
-        let testSocketFileDescriptor = UnixDomainSocket.create(atPath: path)
-        defer { close(testSocketFileDescriptor) }
+        let testSocketFD = UnixDomainSocket.create(atPath: path)
+        defer { close(testSocketFD) }
 
-        if testSocketFileDescriptor < 0 {
+        if testSocketFD < 0 {
             return true
         }
 
-        let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFileDescriptor, toPath: path)
-        if inUse {
-            self.logger.info("Socket \(path) is already in use")
-        } else {
-            self.logger.info("Socket \(path) is available")
-        }
+        let inUse = UnixDomainSocket.connect(fileDescriptor: testSocketFD, toPath: path)
+        self.logger.info("Socket \(path) is \(inUse ? "in use" : "available")")
         return inUse
     }
 
@@ -160,14 +160,17 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             }
             self.logger.info("Started accepting connections on FD \(fileDescriptor)")
             while true {
-                let clientFileDescriptor = UnixDomainSocket.acceptConnection(on: fileDescriptor)
-                guard clientFileDescriptor >= 0 else { continue }
+                let clientFD = UnixDomainSocket.acceptConnection(on: fileDescriptor)
+                guard clientFD >= 0 else { continue }
 
-                self.clientSockets.append(clientFileDescriptor)
-                self.logger.info("Accepted connection on FD \(clientFileDescriptor)")
+                self.clientSockets.insert(clientFD)
+                self.logger.info("Accepted connection on FD \(clientFD)")
+
+                let client = Client(fileDescriptor: clientFD)
+                self.clients[clientFD] = client
 
                 DispatchQueue.global(qos: .background).async {
-                    self.handleClient(clientFileDescriptor)
+                    self.handleClient(clientFD)
                 }
             }
         }
@@ -209,8 +212,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Reads a complete IPC message from the socket.
 
      - Parameters:
-     - fileDescriptor: The socket file descriptor.
-     - bufferSize: The maximum buffer size.
+       - fileDescriptor: The socket file descriptor.
+       - bufferSize: The maximum buffer size.
      - Returns: An `IPC.Message` if successfully read, otherwise `nil`.
      */
     private func readMessage(from fileDescriptor: Int32, bufferSize: Int) -> IPC.Message? {
@@ -271,8 +274,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Reads exactly `count` bytes from the socket into `Data`.
 
      - Parameters:
-     - fileDescriptor: The socket file descriptor.
-     - count: The number of bytes to read.
+       - fileDescriptor: The socket file descriptor.
+       - count: The number of bytes to read.
      - Returns: `Data` if successfully read, otherwise `nil`.
      */
     private func readExactData(from fileDescriptor: Int32, count: Int) -> Data? {
@@ -299,15 +302,20 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Handles incoming IPC messages based on the operation code.
 
      - Parameters:
-     - message: The IPC message received.
-     - fileDescriptor: The client socket file descriptor.
+       - message: The IPC message received.
+       - fileDescriptor: The client socket file descriptor.
      */
     private func handleIPCMessage(_ message: IPC.Message, from fileDescriptor: Int32) {
+        guard let client = clients[fileDescriptor] else {
+            self.logger.error("Client not found for FD \(fileDescriptor)")
+            return
+        }
+
         switch message.operationCode {
         case .handshake:
-            handleHandshake(payload: message.payload, from: fileDescriptor)
+            handleHandshake(payload: message.payload, from: fileDescriptor, client: client)
         case .frame:
-            handleFrame(payload: message.payload, from: fileDescriptor)
+            handleFrame(payload: message.payload, from: fileDescriptor, client: client)
         case .close:
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.normal)
         case .ping:
@@ -323,10 +331,11 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Handles the HANDSHAKE operation.
 
      - Parameters:
-     - payload: The IPC message payload.
-     - fileDescriptor: The client socket file descriptor.
+       - payload: The IPC message payload.
+       - fileDescriptor: The client socket file descriptor.
+       - client: The client instance.
      */
-    private func handleHandshake(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
+    private func handleHandshake(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
         self.logger.info("Handling handshake on FD \(fileDescriptor)")
 
         guard payload.version == 1 else {
@@ -341,13 +350,12 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             return
         }
 
-        clientIds[fileDescriptor] = clientID
-        clientHandshakes[fileDescriptor] = true
+        client.clientID = clientID
+        client.isAcknowledged = true
         self.logger.info("Handshake successful for client \(clientID) on FD \(fileDescriptor) 👍🏾")
 
-        let socketId = self.nextSocketId
+        client.socketId = self.nextSocketId
         self.nextSocketId += 1
-        clientActivity[fileDescriptor] = (pid: payload.arguments?.pid ?? 0, socketId: socketId)
 
         let acknowledgmentPayload = IPC.AcknowledgementPayload(version: 1, clientID: clientID)
         send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
@@ -381,11 +389,12 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Handles the FRAME operation.
 
      - Parameters:
-     - payload: The IPC message payload.
-     - fileDescriptor: The client socket file descriptor.
+       - payload: The IPC message payload.
+       - fileDescriptor: The client socket file descriptor.
+       - client: The client instance.
      */
-    private func handleFrame(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
-        guard clientHandshakes[fileDescriptor] == true else {
+    private func handleFrame(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
+        guard client.isAcknowledged else {
             self.logger.error("Received FRAME before handshake on FD \(fileDescriptor)")
             socketClose(fileDescriptor: fileDescriptor, code: IPC.ClosureCode.abnormal, message: "Need to handshake first")
             return
@@ -399,8 +408,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         self.logger.info("Handling FRAME command: \(command) on FD \(fileDescriptor)")
 
         switch command {
-        case "SET_ACTIVITY": /// https://discord.com/developers/docs/topics/rpc#setactivity
-            handleSetActivity(payload: payload, from: fileDescriptor)
+        case "SET_ACTIVITY":
+            handleSetActivity(payload: payload, from: fileDescriptor, client: client)
         case "INVITE_BROWSER", "GUILD_TEMPLATE_BROWSER":
             handleInviteBrowser(arguments: payload.arguments, command: command, from: fileDescriptor)
         case "DEEP_LINK":
@@ -417,66 +426,51 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Handles the SET_ACTIVITY command.
 
      - Parameters:
-     - payload: The IPC message payload.
-     - fileDescriptor: The client socket file descriptor.
+       - payload: The IPC message payload.
+       - fileDescriptor: The client socket file descriptor.
+       - client: The client instance.
      */
-    private func handleSetActivity(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
-        guard let arguments = payload.arguments else {
+    private func handleSetActivity(payload: IPC.Message.Payload, from fileDescriptor: Int32, client: Client) {
+        guard let arguments = payload.arguments, let activity = arguments.activity else {
             self.logger.warning("Missing arguments for SET_ACTIVITY on FD \(fileDescriptor)")
             respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Missing arguments", nonce: payload.nonce)
             return
         }
 
         activityQueue.async {
-        if var activity = arguments.activity {
-            // 1. Copy application_id from handshake or use existing
-            if activity.applicationID == nil, let clientID = self.clientIds[fileDescriptor] {
-                activity.applicationID = clientID
+            var updatedActivity = activity
+            if updatedActivity.applicationID == nil, let clientID = client.clientID {
+                updatedActivity.applicationID = clientID
             }
 
-            // 2. Set the name based on application_id if it's still "Unknown Activity"
-            // Handled by asset fetching integration
+            updatedActivity.flags = updatedActivity.instance == true ? 1 << 0 : 0
 
-            // 3. Handle instance => flags
-            let isInstance = activity.instance ?? false
-            activity.flags = isInstance ? (1 << 0) : 0
-
-            // 4. Retrieve the existing socketId
-            guard let socketId = self.clientActivity[fileDescriptor]?.socketId else {
+            guard let socketId = client.socketId else {
                 self.logger.error("No socketId found for FD \(fileDescriptor)")
                 self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketId", nonce: payload.nonce)
                 return
             }
 
-            self.clientActivity[fileDescriptor]?.pid = arguments.pid
+            client.pid = arguments.pid
+            client.socketId = socketId
 
-            self.injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
+            self.injectActivity(activity: updatedActivity, pid: arguments.pid, socketId: socketId)
             self.respondSuccess(to: fileDescriptor, with: payload)
-        } else {
-            /*
-             if let existingActivity = self.clientActivity[fileDescriptor] {
-                 self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
-                 self.clientActivity.removeValue(forKey: fileDescriptor)
-                 self.logger.info("Cleared activity for FD \(fileDescriptor)")
-             }
-             self.respondSuccess(to: fileDescriptor, with: payload)
-             */
         }
-    }
     }
 
     /**
      Handles the INVITE_BROWSER and GUILD_TEMPLATE_BROWSER commands.
 
      - Parameters:
-     - args: The command arguments.
-     - cmd: The command string.
-     - fileDescriptor: The client socket file descriptor.
+       - arguments: The command arguments.
+       - command: The command string.
+       - fileDescriptor: The client socket file descriptor.
      */
     private func handleInviteBrowser(arguments: IPC.Message.Payload.CommandArguments?, command: String, from fileDescriptor: Int32) {
         guard let arguments = arguments, let code = arguments.code else {
             self.logger.warning("Missing code for command \(command) on FD \(fileDescriptor)")
-            respondError(to: fileDescriptor, command: command, code: "MissingCode", nonce: UUID().uuidString /* cannot use the same nonce! */)
+            respondError(to: fileDescriptor, command: command, code: "MissingCode", nonce: UUID().uuidString)
             return
         }
         self.logger.info("Command \(command) with code: \(code) on FD \(fileDescriptor)")
@@ -487,8 +481,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Handles the PING operation.
 
      - Parameters:
-     - payload: The IPC message payload.
-     - fileDescriptor: The client socket file descriptor.
+       - payload: The IPC message payload.
+       - fileDescriptor: The client socket file descriptor.
      */
     private func handlePing(payload: IPC.Message.Payload, from fileDescriptor: Int32) {
         self.logger.info("Handling PING on FD \(fileDescriptor)")
@@ -502,9 +496,9 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Sends a Codable JSON packet to Discord over the given file descriptor.
 
      - Parameters:
-     - packet: The payload to send.
-     - operationCode: The operation code.
-     - fileDescriptor: The socket file descriptor.
+       - packet: The payload to send.
+       - operationCode: The operation code.
+       - fileDescriptor: The socket file descriptor.
      */
     private func send<T: Codable>(packet: T, operationCode: IPC.OperationCode, to fileDescriptor: Int32) {
         let encoder = JSONEncoder()
@@ -527,8 +521,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Sends data through the socket.
 
      - Parameters:
-     - fileDescriptor: The socket file descriptor.
-     - data: The data to send.
+       - fileDescriptor: The socket file descriptor.
+       - data: The data to send.
      */
     private func write(to fileDescriptor: Int32, data: Data) {
         data.withUnsafeBytes { pointer in
@@ -549,8 +543,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Responds with a success message to the client.
 
      - Parameters:
-     - fileDescriptor: The client socket file descriptor.
-     - payload: The original IPC message payload.
+       - fileDescriptor: The client socket file descriptor.
+       - payload: The original IPC message payload.
      */
     private func respondSuccess(to fileDescriptor: Int32, with payload: IPC.Message.Payload) {
         if payload.command == nil {
@@ -571,10 +565,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Responds with an error message to the client.
 
      - Parameters:
-     - fileDescriptor: The client socket file descriptor.
-     - cmd: The command that caused the error.
-     - code: The error code.
-     - nonce: The nonce associated with the request.
+       - fileDescriptor: The client socket file descriptor.
+       - command: The command that caused the error.
+       - code: The error code.
+       - nonce: The nonce associated with the request.
      */
     private func respondError(to fileDescriptor: Int32, command: String, code: String, nonce: String?) {
         let errorMessage = IPC.ErrorResponse(
@@ -593,9 +587,9 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Injects the received activity data into the Discord web client via JavaScript.
 
      - Parameters:
-     - activity: The activity data.
-     - pid: The process ID.
-     - socketId: The socket ID.
+       - activity: The activity data.
+       - pid: The process ID.
+       - socketId: The socket ID.
      */
     private func injectActivity(activity: DiscordRPCBridge.Activity, pid: Int, socketId: Int) {
         guard let activityJSON = try? JSONEncoder().encode(activity),
@@ -607,148 +601,129 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
         let injectionScript = """
     (() => {
-        if (!window._voxaDispatcher) {
-            let wpRequire;
-            window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
-            window.webpackChunkdiscord_app.pop();
-    
-            const modules = wpRequire.c;
-            for (const id in modules) {
-                const mod = modules[id].exports;
-                for (const prop in mod) {
-                    const candidate = mod[prop];
-                    if (candidate && candidate.register && candidate.wait) {
-                        window._voxaDispatcher = candidate;
-                        break;
-                    }
-                }
-                if (window._voxaDispatcher) break;
-            }
-        }
-    
-        const Dispatcher = window._voxaDispatcher;
-        if (!Dispatcher) {
-            console.error("Dispatcher not found");
-            return;
-        }
-    
-        const activity = \(activityString);
-        // For subsequent updates, ensure unique activity fields if needed:
-        activity._updateTimestamp = Date.now();
-    
-        // Asset lookup and fetching
-        let lookupApp, lookupAsset;
-    
-        if (!lookupApp || !lookupAsset) {
-            const factories = wpRequire.m;
-    
-            for (const id in factories) {
-                if (factories[id].toString().includes('APPLICATION_RPC(')) {
-                    const mod = wpRequire(id);
-    
-                    // fetchApplicationsRPC
-                    const _lookupApp = Object.values(mod).find(e => {
-                        if (typeof e !== 'function') return;
-                        const str = e.toString();
-                        return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
-                    });
-                    if (_lookupApp) {
-                        lookupApp = async appId => {
-                            let socket = {};
-                            await _lookupApp(socket, appId);
-                            return socket.application;
-                        };
-                    }
-                }
-    
-                if (lookupApp) break;
-            }
-    
-            for (const id in factories) {
-                if (factories[id].toString().includes('getAssetImage: size must === [number, number] for Twitch')) {
-                    const mod = wpRequire(id);
-    
-                    // fetchAssetIds
-                    const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
-                    if (_lookupAsset) {
-                        lookupAsset = async (appId, name) => {
-                            const result = await _lookupAsset(appId, [ name, undefined ]);
-                            return result[0];
-                        };
-                    }
-                }
-    
-                if (lookupAsset) break;
-            }
-        }
-    
-        // Function to fetch application name
-        const fetchAppName = async appId => {
-            if (!lookupApp) {
-                console.error("lookupApp function not found");
-                return "Unknown Application";
-            }
-            try {
-                const app = await lookupApp(appId);
-                return app?.name || "Unknown Application";
-            } catch (error) {
-                console.error("Error fetching application name:", error);
-                return "Unknown Application";
-            }
-        };
-    
-        // Function to fetch asset image URL
-        const fetchAssetImage = async (appId, imageName) => {
-            if (!lookupAsset) {
-                console.error("lookupAsset function not found");
-                return imageName;
-            }
-            try {
-                const assetUrl = await lookupAsset(appId, imageName);
-                return assetUrl || imageName;
-            } catch (error) {
-                console.error("Error fetching asset image:", error);
-                return imageName;
-            }
-        };
-    
-        // Main function to process and dispatch activity
-        const processAndDispatchActivity = async () => {
+            let Dispatcher, lookupApp, lookupAsset;
+
+            // Initialize Webpack and Dispatcher
             if (!Dispatcher) {
-                console.error("Dispatcher not found");
-                return;
+                let wpRequire;
+                window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
+                window.webpackChunkdiscord_app.pop();
+
+                const modules = wpRequire.c;
+                // Updated matching to align with current Discord code
+                for (const id in modules) {
+                    const mod = modules[id].exports;
+                    for (const prop in mod) {
+                        const candidate = mod[prop];
+                        try {
+                            if (candidate && candidate.register && candidate.wait) {
+                                Dispatcher = candidate;
+                                break;
+                            }
+                        } catch {}
+                    }
+                    if (Dispatcher) break;
+                }
             }
-    
-            // Fetch application name
-            if (activity.application_id) {
-                activity.name = await fetchAppName(activity.application_id);
+
+            if (!lookupApp || !lookupAsset) {
+                const factories = wpRequire.m;
+                for (const id in factories) {
+                    const codeStr = factories[id].toString();
+                    if (codeStr.includes('APPLICATION_RPC(') || codeStr.includes('APPLICATION_ASSETS_FETCH_SUCCESS')) {
+                        const mod = wpRequire(id);
+                        
+                        // Detect and assign lookupApp
+                        const _lookupApp = Object.values(mod).find(e => {
+                            if (typeof e !== 'function') return;
+                            const str = e.toString();
+                            return str.includes(',coverImage:') && str.includes('INVALID_ORIGIN');
+                        });
+                        if (_lookupApp) {
+                            lookupApp = async appId => {
+                                let socket = {};
+                                await _lookupApp(socket, appId);
+                                return socket.application;
+                            };
+                        }
+
+                        // Detect and assign lookupAsset
+                        const _lookupAsset = Object.values(mod).find(e => typeof e === 'function' && e.toString().includes('APPLICATION_ASSETS_FETCH_SUCCESS'));
+                        if (_lookupAsset) {
+                            lookupAsset = async (appId, name) => {
+                                const result = await _lookupAsset(appId, [ name, undefined ]);
+                                return result[0];
+                            };
+                        }
+                    }
+                    if (lookupApp && lookupAsset) break;
+                }
             }
-    
-            // Fetch asset images
-            if (activity.assets?.large_image) {
-                activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
-            }
-            if (activity.assets?.small_image) {
-                activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
-            }
-    
-            // Dispatch the updated activity
-            try {
-                Dispatcher.dispatch({
-                    type: 'LOCAL_ACTIVITY_UPDATE',
-                    activity: activity,
-                    pid: \(pid),
-                    socketId: "\(socketId)"
-                });
-                console.info("Activity dispatched successfully:", activity);
-            } catch (e) {
-                console.error("Dispatch error:", e);
-            }
-        };
-    
-        // Execute the main function
-        processAndDispatchActivity();
-    })();
+
+            // Function to fetch application name
+            const fetchAppName = async appId => {
+                if (!lookupApp) {
+                    console.error("lookupApp function not found");
+                    return "Unknown Application";
+                }
+                try {
+                    const app = await lookupApp(appId);
+                    return app?.name || "Unknown Application";
+                } catch (error) {
+                    console.error("Error fetching application name:", error);
+                    return "Unknown Application";
+                }
+            };
+
+            // Function to fetch asset image URL
+            const fetchAssetImage = async (appId, imageName) => {
+                if (!lookupAsset) {
+                    console.error("lookupAsset function not found");
+                    return imageName;
+                }
+                try {
+                    const assetUrl = await lookupAsset(appId, imageName);
+                    return assetUrl || imageName;
+                } catch (error) {
+                    console.error("Error fetching asset image:", error);
+                    return imageName;
+                }
+            };
+
+            // Main function to process and dispatch activity
+            const processAndDispatchActivity = async () => {
+                if (!Dispatcher) {
+                    console.error("Dispatcher not found");
+                    return;
+                }
+
+                const activity = \(activityString);
+
+                // Fetch application name
+                if (activity.application_id) {
+                    activity.name = await fetchAppName(activity.application_id);
+                }
+
+                // Fetch asset images
+                if (activity.assets?.large_image) {
+                    activity.assets.large_image = await fetchAssetImage(activity.application_id, activity.assets.large_image);
+                }
+                if (activity.assets?.small_image) {
+                    activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
+                }
+
+                // Dispatch the updated activity
+                try {
+                    Dispatcher.dispatch({ type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
+                    console.info("Activity dispatched successfully:", { type: 'LOCAL_ACTIVITY_UPDATE', activity: activity, pid: \(pid), socketId: "\(socketId)" });
+                } catch (e) {
+                    console.error("Dispatch error:", e);
+                }
+            };
+
+            // Execute the main function
+            processAndDispatchActivity();
+        })();
     """
 
         DispatchQueue.main.async {
@@ -761,14 +736,13 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
             }
         }
     }
-    // ...existing code...
 
     /**
      Injects JavaScript to clear the activity in the Discord web client.
 
      - Parameters:
-     - pid: The process ID.
-     - socketId: The socket ID.
+       - pid: The process ID.
+       - socketId: The socket ID.
      */
     private func clearActivity(pid: Int, socketId: Int) {
         guard let webView = webView else { return }
@@ -776,17 +750,17 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         let clearScript = """
         (() => {
             let dispatcher;
-        
+
             if (!dispatcher) {
                 let webpackRequire;
                 window.webpackChunkdiscord_app.push([[Symbol()], {}, x => webpackRequire = x]);
                 window.webpackChunkdiscord_app.pop();
-        
+
                 const modules = webpackRequire.c;
-        
+
                 for (const moduleId in modules) {
                     const module = modules[moduleId].exports;
-        
+
                     for (const property in module) {
                         const candidate = module[property];
                         try {
@@ -796,11 +770,11 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
                             }
                         } catch {}
                     }
-        
+
                     if (dispatcher) break;
                 }
             }
-        
+
             if (dispatcher) {
                 try {
                     dispatcher.dispatch({ 
@@ -836,31 +810,32 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      Closes the socket and cleans up client state.
 
      - Parameters:
-     - fileDescriptor: The client socket file descriptor.
-     - code: The closure code.
-     - message: The closure message.
+       - fileDescriptor: The client socket file descriptor.
+       - code: The closure code.
+       - message: The closure message.
      */
-    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode /* conformance sake */, message: String? = nil) {
-    self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
+    private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode, message: String? = nil) {
+        self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
-    activityQueue.async {
-        if let activity = self.clientActivity[fileDescriptor] {
-            self.clearActivity(pid: activity.pid, socketId: activity.socketId)
-            self.clientActivity.removeValue(forKey: fileDescriptor)
+        activityQueue.async {
+            if let client = self.clients[fileDescriptor], let activity = client.activity {
+                self.clearActivity(pid: activity.pid, socketId: activity.socketId)
+                client.activity = nil
+            }
+
+            let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+            self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
+
+            self.clients.removeValue(forKey: fileDescriptor)
+            self.clientSockets.remove(fileDescriptor)
+
+            close(fileDescriptor)
+            self.logger.info("Socket closed on FD \(fileDescriptor)")
         }
-
-        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-        self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
-
-        self.clientHandshakes.removeValue(forKey: fileDescriptor)
-        self.clientIds.removeValue(forKey: fileDescriptor)
-        self.clientSockets.removeAll { $0 == fileDescriptor }
-
-        close(fileDescriptor)
-        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
 }
-}
+
+// ...existing code...
 
 // MARK: - Structures
 
@@ -1059,7 +1034,6 @@ extension DiscordRPCBridge {
             }
         }
 
-        // ?? arRPC had it tho
         /// Enum representing closure codes for IPC.
         enum ClosureCode: Int, ResponseCode {
             case normal = 1000
@@ -1173,7 +1147,7 @@ extension DiscordRPCBridge {
             // Non-optionals
             self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? "Unknown Activity"
             self.type = try container.decodeIfPresent(Int.self, forKey: .type) ?? 0
-            self.createdAt = try container.decodeIfPresent(Int.self, forKey: .createdAt) ?? Int((Date().timeIntervalSince1970 * 1000 /* ms */).rounded())
+            self.createdAt = try container.decodeIfPresent(Int.self, forKey: .createdAt) ?? Int((Date().timeIntervalSince1970 * 1000).rounded())
 
             // Optionals
             self.url = try container.decodeIfPresent(String.self, forKey: .url)
@@ -1232,7 +1206,7 @@ extension DiscordRPCBridge {
             let url: String
         }
 
-        /// Structure representing secrets within an activity./
+        /// Structure representing secrets within an activity.
         struct Secrets: Codable {
             let join: String?
             let spectate: String?
@@ -1274,8 +1248,8 @@ extension DiscordRPCBridge {
          Connects to a Unix Domain Socket at the specified path.
 
          - Parameters:
-         - fileDescriptor: The socket file descriptor.
-         - path: The socket file path.
+           - fileDescriptor: The socket file descriptor.
+           - path: The socket file path.
          - Returns: `true` if the connection is successful, otherwise `false`.
          */
         static func connect(fileDescriptor: Int32, toPath path: String) -> Bool {
@@ -1300,8 +1274,8 @@ extension DiscordRPCBridge {
          Binds the socket to the specified path.
 
          - Parameters:
-         - fileDescriptor: The socket file descriptor.
-         - path: The socket file path.
+           - fileDescriptor: The socket file descriptor.
+           - path: The socket file path.
          - Returns: `true` if binding is successful, otherwise `false`.
          */
         static func bind(fileDescriptor: Int32, toPath path: String) -> Bool {
