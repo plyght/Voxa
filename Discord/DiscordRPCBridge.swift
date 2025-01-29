@@ -24,6 +24,8 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
 
     private var serverSockets: [Int32] = []
     private var clientSockets: [Int32] = []
+
+    private var nextSocketId: Int = 1
     private var activitySocketCounter: Int = 0
 
     private var clientHandshakes: [Int32: Bool] = [:]
@@ -343,6 +345,10 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         clientHandshakes[fileDescriptor] = true
         self.logger.info("Handshake successful for client \(clientID) on FD \(fileDescriptor) 👍🏾")
 
+        let socketId = self.nextSocketId
+        self.nextSocketId += 1
+        clientActivity[fileDescriptor] = (pid: payload.arguments?.pid ?? 0, socketId: socketId)
+
         let acknowledgmentPayload = IPC.AcknowledgementPayload(version: 1, clientID: clientID)
         send(packet: acknowledgmentPayload, operationCode: .handshake, to: fileDescriptor)
 
@@ -422,37 +428,41 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
         }
 
         activityQueue.async {
-            if var activity = arguments.activity {
-                // 1. Copy application_id from handshake or use existing
-                if activity.applicationID == nil, let clientID = self.clientIds[fileDescriptor] {
-                    activity.applicationID = clientID
-                }
+        if var activity = arguments.activity {
+            // 1. Copy application_id from handshake or use existing
+            if activity.applicationID == nil, let clientID = self.clientIds[fileDescriptor] {
+                activity.applicationID = clientID
+            }
 
-                // 2. Set the name based on application_id if it's still "Unknown Activity"
-                // Handled by asset fetching integration
+            // 2. Set the name based on application_id if it's still "Unknown Activity"
+            // Handled by asset fetching integration
 
-                // 3. Handle instance => flags
-                let isInstance = activity.instance ?? false
-                activity.flags = isInstance ? (1 << 0) : 0
+            // 3. Handle instance => flags
+            let isInstance = activity.instance ?? false
+            activity.flags = isInstance ? (1 << 0) : 0
 
-                // 4. Increment local counters and inject
-                self.activitySocketCounter += 1
-                let socketId = self.activitySocketCounter
-                self.clientActivity[fileDescriptor] = (arguments.pid, socketId)
+            // 4. Retrieve the existing socketId
+            guard let socketId = self.clientActivity[fileDescriptor]?.socketId else {
+                self.logger.error("No socketId found for FD \(fileDescriptor)")
+                self.respondError(to: fileDescriptor, command: "SET_ACTIVITY", code: "Invalid socketId", nonce: payload.nonce)
+                return
+            }
 
-                self.injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
-                self.respondSuccess(to: fileDescriptor, with: payload)
-            } else {
-                /*
-                 if let existingActivity = self.clientActivity[fileDescriptor] {
+            self.clientActivity[fileDescriptor]?.pid = arguments.pid
+
+            self.injectActivity(activity: activity, pid: arguments.pid, socketId: socketId)
+            self.respondSuccess(to: fileDescriptor, with: payload)
+        } else {
+            /*
+             if let existingActivity = self.clientActivity[fileDescriptor] {
                  self.clearActivity(pid: existingActivity.pid, socketId: existingActivity.socketId)
                  self.clientActivity.removeValue(forKey: fileDescriptor)
                  self.logger.info("Cleared activity for FD \(fileDescriptor)")
-                 }
-                 self.respondSuccess(to: fileDescriptor, with: payload)
-                 */
-            }
+             }
+             self.respondSuccess(to: fileDescriptor, with: payload)
+             */
         }
+    }
     }
 
     /**
@@ -831,25 +841,25 @@ class DiscordRPCBridge: NSObject { // huge thanks to @vapidinfinity for the impl
      - message: The closure message.
      */
     private func socketClose(fileDescriptor: Int32, code: IPC.ResponseCode /* conformance sake */, message: String? = nil) {
-        self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
+    self.logger.info("Closing socket on FD \(fileDescriptor) with code \(code.rawValue) and message: \(message ?? "\(code.description) closure")")
 
-        activityQueue.async {
-            if let activity = self.clientActivity[fileDescriptor] {
-                self.clearActivity(pid: activity.pid, socketId: activity.socketId)
-                self.clientActivity.removeValue(forKey: fileDescriptor)
-            }
-
-            let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
-            self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
-
-            self.clientHandshakes.removeValue(forKey: fileDescriptor)
-            self.clientIds.removeValue(forKey: fileDescriptor)
-            self.clientSockets.removeAll { $0 == fileDescriptor }
-
-            close(fileDescriptor)
-            self.logger.info("Socket closed on FD \(fileDescriptor)")
+    activityQueue.async {
+        if let activity = self.clientActivity[fileDescriptor] {
+            self.clearActivity(pid: activity.pid, socketId: activity.socketId)
+            self.clientActivity.removeValue(forKey: fileDescriptor)
         }
+
+        let closePayload = IPC.ClosePayload(code: code.rawValue, message: message ?? "\(code.description) closure")
+        self.send(packet: closePayload, operationCode: .close, to: fileDescriptor)
+
+        self.clientHandshakes.removeValue(forKey: fileDescriptor)
+        self.clientIds.removeValue(forKey: fileDescriptor)
+        self.clientSockets.removeAll { $0 == fileDescriptor }
+
+        close(fileDescriptor)
+        self.logger.info("Socket closed on FD \(fileDescriptor)")
     }
+}
 }
 
 // MARK: - Structures
