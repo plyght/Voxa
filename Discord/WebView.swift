@@ -124,20 +124,26 @@ let defaultCSS = """
     .expandedFolderBackground_bc7085,
     .folder_bc7085 {
     /* --background-secondary */
+    /*
         background: color-mix(
             in oklab,
             var(--primary-630) 100%,
             var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
         ) !important;
+    */
+        background: var(--activity-card-background) !important; /* weird fix but ok */
     }
     
     .floating_d1c246 {
     /* --background-primary */
+    /*
         background: color-mix(
             in oklab,
             var(--primary-600) 100%,
             var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
         ) !important;
+    */
+        background: var(--activity-card-background) !important; /* weird fix but ok */
     }
     """
 
@@ -175,6 +181,14 @@ func loadPluginsAndCSS(webView: WKWebView) {
             return """
             :root {
                 --bg-brand: \(accent) !important;
+                \({ () -> String in
+                    var values = [String]()
+                    for i in stride(from: 5, through: 95, by: 5) {
+                        let hexAlpha = String(format: "%02X", Int(round((Double(i) / 100.0) * 255)))
+                        values.append("--brand-\(String(format: "%02d", i))a: \(accent)\(hexAlpha);")
+                    }
+                    return values.joined(separator: "\n")
+                }())
                 --brand-500: \(accent) !important;
             }
             """
@@ -235,8 +249,6 @@ struct WebView: NSViewRepresentable {
     var channelClickWidth: CGFloat
     var initialURL: String
     @Binding var webViewReference: WKWebView?
-
-    private let discordRPCBridge = DiscordRPCBridge()
 
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: String) {
@@ -465,8 +477,7 @@ struct WebView: NSViewRepresentable {
             )
         )
 
-        // Start our new Swift-based “arRPC” bridging approach:
-        discordRPCBridge.startBridge(for: webView)
+        DiscordRPCBridge.shared.startBridge(for: webView)
 
         loadPluginsAndCSS(webView: webView)
         loadInitialURL(webView: webView) // TODO: swiftUI view err instead
