@@ -3,8 +3,8 @@ import WebKit
 
 struct DiscordWindowContent: View {
     var channelClickWidth: CGFloat
-    var initialURL: String = "https://discord.com/app"
-    
+    @AppStorage("discordReleaseChannel") private var discordReleaseChannel: String = "stable"
+
     // Reference to the underlying WKWebView
     @State var webViewReference: WKWebView?
     
@@ -18,7 +18,7 @@ struct DiscordWindowContent: View {
                 // Embed the Discord WebView
                 WebView(
                     channelClickWidth: channelClickWidth,
-                    initialURL: initialURL,
+                    initialURL: DiscordReleaseChannel.allCases.first(where: { $0.rawValue == discordReleaseChannel })!.url,
                     webViewReference: $webViewReference
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

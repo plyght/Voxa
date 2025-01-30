@@ -3,7 +3,8 @@ import SwiftUI
 struct GeneralView: View {
     @AppStorage("discordUsesSystemAccent") private var fullSystemAccent: Bool = true
     @AppStorage("discordSidebarDividerUsesSystemAccent") private var sidebarDividerSystemAccent: Bool = true
-
+    @AppStorage("discordReleaseChannel") private var discordReleaseChannel: String = "stable"
+    @State private var discordReleaseChannelSelection: DiscordReleaseChannel = .stable
 
     var body: some View {
         ScrollView {
@@ -40,6 +41,27 @@ struct GeneralView: View {
                         .foregroundStyle(.placeholder)
                 }
                 .onChange(of: sidebarDividerSystemAccent, { hardReloadWebView(webView: Vars.webViewReference!) })
+
+                Picker(selection: $discordReleaseChannelSelection, content: {
+                    ForEach(DiscordReleaseChannel.allCases, id: \.self) {
+                        Text($0.description)
+                    }
+                }, label: {
+                    Text("Discord Release Channel")
+                    Text("Modifying this setting will reload Voxa.")
+                        .foregroundStyle(.placeholder)
+                })
+                .onChange(of: discordReleaseChannelSelection) {
+                    switch discordReleaseChannelSelection {
+                    case .stable:
+                        discordReleaseChannel = "stable"
+                    case .PTB:
+                        discordReleaseChannel = "ptb"
+                    case .canary:
+                        discordReleaseChannel = "canary"
+                    }
+                }
+                .onChange(of: discordReleaseChannelSelection, { hardReloadWebView(webView: Vars.webViewReference!) })
 
             }
             .formStyle(.grouped)

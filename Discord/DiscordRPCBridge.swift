@@ -681,7 +681,7 @@ class DiscordRPCBridge: NSObject {
 
         let injectionScript = """
         (() => {
-            let Dispatcher, lookupApp, lookupAsset;
+            let Dispatcher, lookupApp, lookupAsset, wpRequire;
 
             // Initialize Webpack and Dispatcher
             if (!Dispatcher) {

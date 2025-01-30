@@ -91,8 +91,7 @@ struct SecondaryWindowView: View {
 
     var body: some View {
         DiscordWindowContent(
-            channelClickWidth: channelClickWidth,
-            initialURL: url
+            channelClickWidth: channelClickWidth
         )
         .frame(minWidth: 200, minHeight: 200)
     }

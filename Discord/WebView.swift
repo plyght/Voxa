@@ -258,17 +258,17 @@ func loadPluginsAndCSS(webView: WKWebView) {
 
 struct WebView: NSViewRepresentable {
     var channelClickWidth: CGFloat
-    var initialURL: String
+    var initialURL: URL
     @Binding var webViewReference: WKWebView?
 
     // Initializers
-    init(channelClickWidth: CGFloat, initialURL: String) {
+    init(channelClickWidth: CGFloat, initialURL: URL) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
         self._webViewReference = .constant(nil)
     }
 
-    init(channelClickWidth: CGFloat, initialURL: String, webViewReference: Binding<WKWebView?>) {
+    init(channelClickWidth: CGFloat, initialURL: URL, webViewReference: Binding<WKWebView?>) {
         self.channelClickWidth = channelClickWidth
         self.initialURL = initialURL
         self._webViewReference = webViewReference
@@ -493,7 +493,7 @@ struct WebView: NSViewRepresentable {
         }
 
         loadPluginsAndCSS(webView: webView)
-        loadInitialURL(webView: webView) // TODO: swiftUI view err instead
+        webView.load(URLRequest(url: initialURL))
 
         return webView
     }
@@ -502,22 +502,6 @@ struct WebView: NSViewRepresentable {
         // If you wish to update the webView here (e.g., reload or inject new CSS),
         // you can do so. Currently, no updates are necessary.
         loadPluginsAndCSS(webView: nsView)
-    }
-
-    private func loadInitialURL(webView: WKWebView) {
-        if let url = URL(string: initialURL) {
-            webView.load(URLRequest(url: url))
-        } else {
-            let errorHTML = """
-                <html>
-                  <body>
-                    <h2>Invalid URL</h2>
-                    <p>The provided URL could not be parsed.</p>
-                  </body>
-                </html>
-                """
-            webView.loadHTMLString(errorHTML, baseURL: nil)
-        }
     }
 
     // MARK: - Coordinator
@@ -709,8 +693,11 @@ struct WebView: NSViewRepresentable {
 func hardReloadWebView(webView: WKWebView) {
     webView.configuration.userContentController.removeAllUserScripts()
     loadPluginsAndCSS(webView: webView)
-
-    if let url = URL(string: "https://discord.com/app") {
-        webView.load(URLRequest(url: url))
+    guard let releaseChannel = UserDefaults.standard.string(forKey: "discordReleaseChannel"),
+          let url = DiscordReleaseChannel(rawValue: releaseChannel)?.url else {
+        webView.load(URLRequest(url: DiscordReleaseChannel.stable.url))
+        return
     }
+
+    webView.load(URLRequest(url: url))
 }
