@@ -22,7 +22,7 @@ var hexAccentColor: String? {
 /// Default CSS applied to the WebView
 let defaultCSS = """
     :root {
-        --background-accent: rgb(0, 0, 0, 0.5) !important;
+        --background-accent: rgba(0, 0, 0, 0.5) !important;
         --background-floating: transparent !important;
         --background-message-highlight: transparent !important;
         --background-message-highlight-hover: transparent !important;
@@ -41,55 +41,66 @@ let defaultCSS = """
         --bg-overlay-3: transparent !important;
         --channeltextarea-background: transparent !important;
     }
-    
-    .sidebar_a4d4d9 {
-        background-color: rgb(0, 0, 0, 0.15) !important;
-        border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
+
+    /*
+    .sidebar_c48ade {
+        background-color: rgba(0, 0, 0, 0.15) !important;
+        border-right: solid 1px rgba(0, 0, 0, 0.3) !important;
+    }
+    */
+
+    .guilds_c48ade {
+        /* background-color: rgba(0, 0, 0, 0.3) !important; */
+        /* border-right: solid 1px rgba(0, 0, 0, 0.1) !important; */
+        margin-top: 48px !important;
+        /* the key is box-shadow: var(--elevation-low); */
     }
     
-    .guilds_a4d4d9 {
-        background-color: rgb(0, 0, 0, 0.3) !important;
-        border-right: solid 1px rgb(0, 0, 0, 0.3) !important;
-        padding-top: 36px;
+    .scroller_ef3116 {
+        padding-top: none !important;
     }
-    
+
     .theme-dark .themed_fc4f04 {
         background-color: transparent !important;
     }
     
+    .themed__9293f {
+        background-color: transparent !important;
+    }
+
     .channelTextArea_a7d72e {
-        background-color: rgb(0, 0, 0, 0.15) !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
     }
-    
+
     .button_df39bd {
-        background-color: rgb(0, 0, 0, 0.15) !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
     }
-    
+
     .chatContent_a7d72e {
         background-color: transparent !important;
         background: transparent !important;
     }
-    
+
     .chat_a7d72e {
         background: transparent !important;
     }
-       
+
     .quickswitcher_f4e139 {
         background-color: transparent !important;
         -webkit-backdrop-filter: blur(5px) !important;
     }
-    
+
     .content_a7d72e {
         background: none !important;
     }
-    
+
     .container_eedf95 {
         position: relative;
         background-color: rgba(0, 0, 0, 0.5);
     }
-    
+
     .container_eedf95::before {
-        content: '';
+        content: "";
         position: absolute;
         top: 0;
         left: 0;
@@ -100,49 +111,49 @@ let defaultCSS = """
         background-color: inherit;
         z-index: -1;
     }
-    
+
     .container_a6d69a {
         background: transparent !important;
         background-color: transparent !important;
-        backdrop-filter: blur(10px); !important;
+        backdrop-filter: blur(10px) !important;
     }
-    
+
     .mainCard_a6d69a {
-        background-color: rgb(0, 0, 0, 0.15) !important;
+        background-color: rgba(0, 0, 0, 0.15) !important;
     }
-    
+
     .listItem_c96c45:has(div[aria-label="Download Apps"]) {
         display: none !important;
     }
-    
-    // should fix strange out-of-place gradient-- weirdly does not
+
+    /* should fix strange out-of-place gradient -- weirdly does not */
     .children_fc4f04:after {
         background: 0 !important;
         width: 0 !important;
     }
-    
+
     .expandedFolderBackground_bc7085,
     .folder_bc7085 {
-    /* --background-secondary */
-    /*
-        background: color-mix(
-            in oklab,
-            var(--primary-630) 100%,
-            var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
-        ) !important;
-    */
+        /* --background-secondary */
+        /*
+            background: color-mix(
+                in oklab,
+                var(--primary-630) 100%,
+                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
+            ) !important;
+        */
         background: var(--activity-card-background) !important; /* weird fix but ok */
     }
-    
+
     .floating_d1c246 {
-    /* --background-primary */
-    /*
-        background: color-mix(
-            in oklab,
-            var(--primary-600) 100%,
-            var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
-        ) !important;
-    */
+        /* --background-primary */
+        /*
+            background: color-mix(
+                in oklab,
+                var(--primary-600) 100%,
+                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
+            ) !important;
+        */
         background: var(--activity-card-background) !important; /* weird fix but ok */
     }
     """
@@ -194,7 +205,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
             """
         }())
         
-        .guildSeparator_d0c57e {
+        .guildSeparator__252b6 {
             background-color: \({
                 guard let accent = hexAccentColor,
                     sidebarDividerSystemAccent == true else {
