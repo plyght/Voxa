@@ -1232,6 +1232,26 @@ extension DiscordRPCBridge {
         struct Timestamps: Codable {
             var start: Int?
             var end: Int?
+
+            enum CodingKeys: String, CodingKey {
+                case start
+                case end
+            }
+
+            init(from decoder: Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+
+                func convertToMillisecondsIfNecessary(_ value: Int?) -> Int? {
+                    guard let value else { return nil }
+                    let unixTimeInMilliseconds = Int(Date().timeIntervalSince1970 * 1000)
+
+                    // assume seconds if it's more than 100x smaller
+                    return value * 100 < unixTimeInMilliseconds ? value * 1000 : value
+                }
+
+                self.start = convertToMillisecondsIfNecessary(try container.decodeIfPresent(Int.self, forKey: .start))
+                self.end = convertToMillisecondsIfNecessary(try container.decodeIfPresent(Int.self, forKey: .end))
+            }
         }
 
         /// Structure representing an emoji within an activity.
