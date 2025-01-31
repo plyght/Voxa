@@ -685,7 +685,7 @@ class DiscordRPCBridge: NSObject {
 
             // Initialize Webpack and Dispatcher
             if (!Dispatcher) {
-                let wpRequire;
+                // Explicitly push and pop a Webpack chunk to initialize wpRequire
                 window.webpackChunkdiscord_app.push([[Symbol()], {}, x => wpRequire = x]);
                 window.webpackChunkdiscord_app.pop();
 
@@ -791,7 +791,7 @@ class DiscordRPCBridge: NSObject {
                 if (activity.assets?.small_image) {
                     activity.assets.small_image = await fetchAssetImage(activity.application_id, activity.assets.small_image);
                 }
-        
+            
                 // Dispatch the updated activity
                 try {
                     Dispatcher.dispatch({
