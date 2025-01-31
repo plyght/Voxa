@@ -167,9 +167,13 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 return values.joined(separator: "\n")
             }())
             --brand-500: \(accent) !important;
+            --brand-560: \(accent)26 !important; /* filled button hover */
+            --brand-600: \(accent)30 !important; /* filled button clicked */
         
             --mention-foreground: \(accent) !important;
             --mention-background: \(accent)26 !important;
+            --control-brand-foreground: \(accent)32 !important;
+            --control-brand-foreground-new: \(accent)30 !important;
         }
         """
     }())
