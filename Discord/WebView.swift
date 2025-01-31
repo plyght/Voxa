@@ -693,11 +693,8 @@ struct WebView: NSViewRepresentable {
 func hardReloadWebView(webView: WKWebView) {
     webView.configuration.userContentController.removeAllUserScripts()
     loadPluginsAndCSS(webView: webView)
-    guard let releaseChannel = UserDefaults.standard.string(forKey: "discordReleaseChannel"),
-          let url = DiscordReleaseChannel(rawValue: releaseChannel)?.url else {
-        webView.load(URLRequest(url: DiscordReleaseChannel.stable.url))
-        return
-    }
+    let releaseChannel = UserDefaults.standard.string(forKey: "discordReleaseChannel") ?? ""
+    let url = DiscordReleaseChannel(rawValue: releaseChannel)?.url ?? DiscordReleaseChannel.stable.url
 
     webView.load(URLRequest(url: url))
 }
