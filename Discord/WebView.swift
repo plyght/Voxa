@@ -159,7 +159,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 }
                 return values.joined(separator: "\n")
             }())
-            --brand-260: \(accent)1A !important
+            --brand-260: \(accent)1A !important;
             --brand-500: \(accent) !important;
             --brand-560: \(accent)26 !important; /* filled button hover */
             --brand-600: \(accent)30 !important; /* filled button clicked */
