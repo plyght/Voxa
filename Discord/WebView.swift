@@ -19,144 +19,111 @@ var hexAccentColor: String? {
     return nil
 }
 
-/// Default CSS applied to the WebView
-let defaultCSS = """
-    :root {
-        --background-accent: rgba(0, 0, 0, 0.5) !important;
-        --background-floating: transparent !important;
-        --background-message-highlight: transparent !important;
-        --background-message-highlight-hover: transparent !important;
-        --background-message-hover: transparent !important;
-        --background-mobile-primary: transparent !important;
-        --background-mobile-secondary: transparent !important;
-        --background-modifier-accent: transparent !important;
-        --background-modifier-active: transparent !important;
-        --background-modifier-hover: transparent !important;
-        --background-modifier-selected: transparent !important;
-        --background-nested-floating: transparent !important;
-        --background-primary: transparent !important;
-        --background-secondary: transparent !important;
-        --background-secondary-alt: transparent !important;
-        --background-tertiary: transparent !important;
-        --bg-overlay-3: transparent !important;
-        --channeltextarea-background: transparent !important;
-    }
+/// Non-dynamic default CSS applied to the webview.
+let rootCSS = """
+:root {
+    --background-accent: rgba(0, 0, 0, 0.5) !important;
+    --background-floating: transparent !important;
+    --background-message-highlight: transparent !important;
+    --background-message-highlight-hover: transparent !important;
+    --background-message-hover: transparent !important;
+    --background-mobile-primary: transparent !important;
+    --background-mobile-secondary: transparent !important;
+    --background-modifier-accent: transparent !important;
+    --background-modifier-active: transparent !important;
+    --background-modifier-hover: transparent !important;
+    --background-modifier-selected: transparent !important;
+    --background-nested-floating: transparent !important;
+    --background-primary: transparent !important;
+    --background-secondary: transparent !important;
+    --background-secondary-alt: transparent !important;
+    --background-tertiary: transparent !important;
+    --bg-overlay-3: transparent !important;
+    --channeltextarea-background: transparent !important;
+}
+"""
 
-    /*
-    .sidebar_c48ade {
-        background-color: rgba(0, 0, 0, 0.15) !important;
-        border-right: solid 1px rgba(0, 0, 0, 0.3) !important;
-    }
-    */
+struct SuffixedCSSStyle: Codable {
+    let prefix: String
+    let styles: [String: String]
+}
 
-    .guilds_c48ade {
-        /* background-color: rgba(0, 0, 0, 0.3) !important; */
-        /* border-right: solid 1px rgba(0, 0, 0, 0.1) !important; */
-        margin-top: 48px !important;
-        /* the key is box-shadow: var(--elevation-low); */
-    }
-    
-    .scroller_ef3116 {
-        padding-top: none !important;
-    }
-
-    .theme-dark .themed_fc4f04 {
-        background-color: transparent !important;
-    }
-    
-    .themed__9293f {
-        background-color: transparent !important;
-    }
-
-    .channelTextArea_a7d72e {
-        background-color: rgba(0, 0, 0, 0.15) !important;
-    }
-
-    .button_df39bd {
-        background-color: rgba(0, 0, 0, 0.15) !important;
-    }
-
-    .chatContent_a7d72e {
-        background-color: transparent !important;
-        background: transparent !important;
-    }
-
-    .chat_a7d72e {
-        background: transparent !important;
-    }
-
-    .quickswitcher_f4e139 {
-        background-color: transparent !important;
-        -webkit-backdrop-filter: blur(5px) !important;
-    }
-
-    .content_a7d72e {
-        background: none !important;
-    }
-
-    .container_eedf95 {
-        position: relative;
-        background-color: rgba(0, 0, 0, 0.5);
-    }
-
-    .container_eedf95::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        backdrop-filter: none;
-        filter: blur(10px);
-        background-color: inherit;
-        z-index: -1;
-    }
-
-    .container_a6d69a {
-        background: transparent !important;
-        background-color: transparent !important;
-        backdrop-filter: blur(10px) !important;
-    }
-
-    .mainCard_a6d69a {
-        background-color: rgba(0, 0, 0, 0.15) !important;
-    }
-
-    .listItem_c96c45:has(div[aria-label="Download Apps"]) {
-        display: none !important;
-    }
-
-    /* should fix strange out-of-place gradient -- weirdly does not */
-    .children_fc4f04:after {
-        background: 0 !important;
-        width: 0 !important;
-    }
-
-    .expandedFolderBackground_bc7085,
-    .folder_bc7085 {
-        /* --background-secondary */
-        /*
-            background: color-mix(
-                in oklab,
-                var(--primary-630) 100%,
-                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
-            ) !important;
-        */
-        background: var(--activity-card-background) !important; /* weird fix but ok */
-    }
-
-    .floating_d1c246 {
-        /* --background-primary */
-        /*
-            background: color-mix(
-                in oklab,
-                var(--primary-600) 100%,
-                var(--theme-base-color, black) var(--theme-base-color-amount, 0%)
-            ) !important;
-        */
-        background: var(--activity-card-background) !important; /* weird fix but ok */
-    }
-    """
+/// CSS Styles that are sent to a script to automatically be suffixed and updated dynamically.
+/// You may explicitly add suffixes if necessary (e.g. if there are multiple objects that share the same prefix)
+var suffixedCSSStyles: [String: [String: String]] = [
+    "guilds": [
+        "margin-top": "48px"
+    ],
+    "scroller": [
+        "padding-top": "none"
+    ],
+    "themed_fc4f04": [
+        "background-color": "transparent"
+    ],
+    "themed__9293f": [
+        "background-color": "transparent"
+    ],
+    "channelTextArea": [
+        "background-color": "rgba(0, 0, 0, 0.15)"
+    ],
+    "button_df39bd": [
+        "background-color": "rgba(0, 0, 0, 0.15)"
+    ],
+    "chatContent": [
+        "background-color": "transparent",
+        "background": "transparent"
+    ],
+    "chat": [
+        "background": "transparent"
+    ],
+    "quickswitcher": [
+        "background-color": "transparent",
+        "-webkit-backdrop-filter": "blur(5px)"
+    ],
+    "content": [
+        "background": "none"
+    ],
+    "container_eedf95": [
+        "position": "relative",
+        "background-color": "rgba(0, 0, 0, 0.5)"
+    ],
+    "container_eedf95::before": [
+        "content": "''",
+        "position": "absolute",
+        "top": "0",
+        "left": "0",
+        "right": "0",
+        "bottom": "0",
+        "backdrop-filter": "none",
+        "filter": "blur(10px)",
+        "background-color": "inherit",
+        "z-index": "-1"
+    ],
+    "container_a6d69a": [
+        "background": "transparent",
+        "background-color": "transparent",
+        "backdrop-filter": "blur(10px)"
+    ],
+    "mainCard": [
+        "background-color": "rgba(0, 0, 0, 0.15)"
+    ],
+    "listItem_c96c45:has(div[aria-label='Download Apps'])": [
+        "display": "none"
+    ],
+    "children_fc4f04:after": [
+        "background": "0",
+        "width": "0"
+    ],
+    "expandedFolderBackground": [
+        "background": "var(--activity-card-background)"
+    ],
+    "folder": [
+        "background": "var(--activity-card-background)"
+    ],
+    "floating": [
+        "background": "var(--activity-card-background)"
+    ]
+]
 
 // MARK: - Utility Functions
 
@@ -180,48 +147,47 @@ func loadPluginsAndCSS(webView: WKWebView) {
     @AppStorage("discordUsesSystemAccent") var fullSystemAccent: Bool = true
     @AppStorage("discordSidebarDividerUsesSystemAccent") var sidebarDividerSystemAccent: Bool = true
 
-    let variableCSS = """
-        /* CSS variables that require reinitialisation on view reload */
-        
-        \({
-            guard let accent = hexAccentColor,
-                fullSystemAccent == true else {
-                return ""
-            }
+    let dynamicRootCSS = """
+    /* CSS variables that require reinitialisation on view reload */
+    \({
+        guard let accent = hexAccentColor,
+            fullSystemAccent == true else {
+            return ""
+        }
 
-            return """
-            :root {
-                --bg-brand: \(accent) !important;
-                \({ () -> String in
-                    var values = [String]()
-                    for i in stride(from: 5, through: 95, by: 5) {
-                        let hexAlpha = String(format: "%02X", Int(round((Double(i) / 100.0) * 255)))
-                        values.append("--brand-\(String(format: "%02d", i))a: \(accent)\(hexAlpha);")
-                    }
-                    return values.joined(separator: "\n")
-                }())
-                --brand-500: \(accent) !important;
-            }
-            """
-        }())
-        
-        .guildSeparator__252b6 {
-            background-color: \({
-                guard let accent = hexAccentColor,
-                    sidebarDividerSystemAccent == true else {
-                    return """
-                    color-mix(/* --background-modifier-accent */
-                        in oklab,
-                        hsl(var(--primary-500-hsl) / 0.48) 100%,
-                        hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
-                    )
-                    """
+        return """
+        :root {
+            --bg-brand: \(accent) !important;
+            \({ () -> String in
+                var values = [String]()
+                for i in stride(from: 5, through: 95, by: 5) {
+                    let hexAlpha = String(format: "%02X", Int(round((Double(i) / 100.0) * 255)))
+                    values.append("--brand-\(String(format: "%02d", i))a: \(accent)\(hexAlpha);")
                 }
-
-                return accent
-            }()) !important;
+                return values.joined(separator: "\n")
+            }())
+            --brand-500: \(accent) !important;
         }
         """
+    }())
+    """
+
+    // Also requires re-initialisation on view reload
+    suffixedCSSStyles["guildSeparator"] = [
+        "background-color": {
+            guard let accent = hexAccentColor,
+                  sidebarDividerSystemAccent == true else {
+                return """
+                color-mix(/* --background-modifier-accent */
+                    in oklab,
+                    hsl(var(--primary-500-hsl) / 0.48) 100%,
+                    hsl(var(--theme-base-color-hsl, 0 0% 0%) / 0.48) var(--theme-base-color-amount, 0%)
+                )
+                """
+            }
+
+            return accent
+        }()]
 
     // Inject default CSS
     webView.configuration.userContentController.addUserScript(
@@ -229,13 +195,127 @@ func loadPluginsAndCSS(webView: WKWebView) {
             source: """
             const defaultStyle = document.createElement('style');
             defaultStyle.id = 'voxaStyle';
-            defaultStyle.textContent = `\(defaultCSS + "\n\n" + variableCSS)`;
+            defaultStyle.textContent = `\(rootCSS + "\n\n" + dynamicRootCSS)`;
             document.head.appendChild(defaultStyle);
             
             const customStyle = document.createElement('style');
             customStyle.id = 'voxaCustomStyle';
             customStyle.textContent = "";
             document.head.appendChild(customStyle);
+            """,
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        )
+    )
+
+    let prefixStyles = suffixedCSSStyles.map { SuffixedCSSStyle(prefix: $0.key, styles: $0.value) }
+
+    guard let styleData: Data = {
+        do {
+            return try JSONEncoder().encode(prefixStyles)
+        } catch {
+            print("Error encoding CSS styles to JSON: \(error)")
+            return nil
+        }
+    }(), let styles = String(data: styleData, encoding: .utf8) else {
+        print("Error converting style data to JSON string")
+        return
+    }
+
+    let escapedStyles = styles
+            .replacingOccurrences(of: #"\"#, with: #"\\"#)
+
+    webView.configuration.userContentController.addUserScript(
+        WKUserScript(
+            source: """
+            (function() {
+              const prefixes = JSON.parse(`\(escapedStyles)`);
+              if (!prefixes.length) {
+                console.log("No prefixes provided.");
+                return;
+              }
+
+              // Each prefix maps to a Set of matching classes
+              const classSets = prefixes.map(() => new Set());
+
+              function processElementClasses(element) {
+                element.classList.forEach(cls => {
+                  prefixes.forEach((prefixConfig, index) => {
+                    const { prefix, styles } = prefixConfig;
+                    if (cls.startsWith(prefix + '_') || cls === prefix) {
+                      classSets[index].add(cls);
+                      applyImportantStyles(element, styles);
+                    }
+                  });
+                });
+              }
+
+              function applyImportantStyles(element, styles) {
+                for (const [prop, val] of Object.entries(styles)) {
+                  element.style.setProperty(prop, val, 'important');
+                }
+              }
+
+              function buildPrefixCSS(prefixConfigs) {
+                let cssOutput = '';
+                for (const { prefix, styles } of prefixConfigs) {
+                  const hasSpace = prefix.includes(' ');
+                  const placeholder = hasSpace ? prefix : `${prefix}_placeholder`;
+                  cssOutput += `.${placeholder} {\n`;
+                  for (const [prop, val] of Object.entries(styles)) {
+                    cssOutput += `  ${prop}: ${val} !important;\n`;
+                  }
+                  cssOutput += `}\n\n`;
+                }
+                return cssOutput;
+              }
+
+              function showParsedCSS() {
+                console.log(`Generated CSS from JSON:\n${buildPrefixCSS(prefixes)}`);
+              }
+
+              // Initial pass over all elements
+              document.querySelectorAll('*').forEach(processElementClasses);
+
+              // Monitor DOM changes
+              const observer = new MutationObserver(mutations => {
+                mutations.forEach(mutation => {
+                  if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(node => {
+                      if (node.nodeType === Node.ELEMENT_NODE) {
+                        processElementClasses(node);
+                        node.querySelectorAll('*').forEach(processElementClasses);
+                      }
+                    });
+                  } else if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+                    processElementClasses(mutation.target);
+                  }
+                });
+              });
+
+              observer.observe(document.body, { childList: true, attributes: true, subtree: true });
+
+              function displayClassReports() {
+                prefixes.forEach((prefixConfig, index) => {
+                  const { prefix } = prefixConfig;
+                  const matchedClasses = classSets[index];
+                  if (matchedClasses.size > 0) {
+                    console.log(`Matching classes for prefix "${prefix}":`);
+                    matchedClasses.forEach(cls => console.log(cls));
+                  } else {
+                    console.log(`No matching classes found for prefix "${prefix}".`);
+                  }
+                });
+              }
+
+              // Initial log
+              displayClassReports();
+              // Re-log classes periodically
+              setInterval(displayClassReports, 2000);
+
+              // Expose CSS viewer
+              window.showParsedCSS = showParsedCSS;
+            })();        
             """,
             injectionTime: .atDocumentEnd,
             forMainFrameOnly: true
