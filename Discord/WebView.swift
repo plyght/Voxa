@@ -40,6 +40,7 @@ let rootCSS = """
     --background-tertiary: transparent !important;
     --bg-overlay-3: transparent !important;
     --channeltextarea-background: transparent !important;
+    --background-secondary-alt: transparent !important;
 }
 """
 
@@ -52,7 +53,7 @@ struct SuffixedCSSStyle: Codable {
 /// You may explicitly add suffixes if necessary (e.g. if there are multiple objects that share the same prefix)
 var suffixedCSSStyles: [String: [String: String]] = [
     "guilds": [
-        "margin-top": "48px"
+        "margin-top": "4em"
     ],
     "scroller": [
         "padding-top": "none"
@@ -83,26 +84,8 @@ var suffixedCSSStyles: [String: [String: String]] = [
     "content": [
         "background": "none"
     ],
-    "container_eedf95": [
-        "position": "relative",
-        "background-color": "rgba(0, 0, 0, 0.5)"
-    ],
-    "container_eedf95::before": [
-        "content": "''",
-        "position": "absolute",
-        "top": "0",
-        "left": "0",
-        "right": "0",
-        "bottom": "0",
-        "backdrop-filter": "none",
-        "filter": "blur(10px)",
-        "background-color": "inherit",
-        "z-index": "-1"
-    ],
-    "container_a6d69a": [
-        "background": "transparent",
-        "background-color": "transparent",
-        "backdrop-filter": "blur(10px)"
+    "container": [
+        "background-color": "transparent"
     ],
     "mainCard": [
         "background-color": "rgba(0, 0, 0, 0.15)"
@@ -122,6 +105,15 @@ var suffixedCSSStyles: [String: [String: String]] = [
     ],
     "floating": [
         "background": "var(--activity-card-background)"
+    ],
+    "banner": [
+        "background-color": "transparent"
+    ],
+    "content_f75fb0:before": [
+        "display": "none"
+    ],
+    "outer": [
+        "background-color": "transparent"
     ]
 ]
 
@@ -166,6 +158,8 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 }
                 return values.joined(separator: "\n")
             }())
+            
+            --brand-260: \(accent)1A !important
             --brand-500: \(accent) !important;
             --brand-560: \(accent)26 !important; /* filled button hover */
             --brand-600: \(accent)30 !important; /* filled button clicked */
