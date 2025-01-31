@@ -53,7 +53,7 @@ struct SuffixedCSSStyle: Codable {
 /// You may explicitly add suffixes if necessary (e.g. if there are multiple objects that share the same prefix)
 var suffixedCSSStyles: [String: [String: String]] = [
     "guilds": [
-        "margin-top": "4em"
+        "margin-top": "48px"
     ],
     "scroller": [
         "padding-top": "none"
@@ -149,6 +149,7 @@ func loadPluginsAndCSS(webView: WKWebView) {
 
         return """
         :root {
+        /* brand */
             --bg-brand: \(accent) !important;
             \({ () -> String in
                 var values = [String]()
@@ -158,12 +159,12 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 }
                 return values.joined(separator: "\n")
             }())
-            
             --brand-260: \(accent)1A !important
             --brand-500: \(accent) !important;
             --brand-560: \(accent)26 !important; /* filled button hover */
             --brand-600: \(accent)30 !important; /* filled button clicked */
         
+        /* foregrounds */
             --mention-foreground: \(accent) !important;
             --mention-background: \(accent)26 !important;
             --control-brand-foreground: \(accent)32 !important;
