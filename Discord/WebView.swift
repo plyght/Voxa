@@ -106,9 +106,6 @@ var suffixedCSSStyles: [String: [String: String]] = [
     "floating": [
         "background": "var(--activity-card-background)"
     ],
-    "banner": [
-        "background-color": "transparent"
-    ],
     "content_f75fb0:before": [
         "display": "none"
     ],
