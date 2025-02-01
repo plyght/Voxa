@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6A821BF82D4EA44600A3A9E4 /* DiscordRPCBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 6A821BF72D4EA44600A3A9E4 /* DiscordRPCBridge */; };
+		6A821C252D4EA98B00A3A9E4 /* DiscordRPCBridge in Frameworks */ = {isa = PBXBuildFile; productRef = 6A821C242D4EA98B00A3A9E4 /* DiscordRPCBridge */; };
 		DC9455282D28B7FC0023E2BB /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = DC9455272D28B7FC0023E2BB /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -40,7 +42,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6A821BF82D4EA44600A3A9E4 /* DiscordRPCBridge in Frameworks */,
 				DC9455282D28B7FC0023E2BB /* Sparkle in Frameworks */,
+				6A821C252D4EA98B00A3A9E4 /* DiscordRPCBridge in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +88,8 @@
 			name = Discord;
 			packageProductDependencies = (
 				DC9455272D28B7FC0023E2BB /* Sparkle */,
+				6A821BF72D4EA44600A3A9E4 /* DiscordRPCBridge */,
+				6A821C242D4EA98B00A3A9E4 /* DiscordRPCBridge */,
 			);
 			productName = Discord;
 			productReference = D910A0852CF2B6F8005F6119 /* Voxa.app */;
@@ -115,6 +121,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */,
+				6A821C232D4EA98B00A3A9E4 /* XCRemoteSwiftPackageReference "DiscordRPCBridge" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D910A0862CF2B6F8005F6119 /* Products */;
@@ -373,6 +380,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		6A821C232D4EA98B00A3A9E4 /* XCRemoteSwiftPackageReference "DiscordRPCBridge" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vapidinfinity/DiscordRPCBridge";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.1;
+			};
+		};
 		DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -384,6 +399,15 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		6A821BF72D4EA44600A3A9E4 /* DiscordRPCBridge */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = DiscordRPCBridge;
+		};
+		6A821C242D4EA98B00A3A9E4 /* DiscordRPCBridge */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6A821C232D4EA98B00A3A9E4 /* XCRemoteSwiftPackageReference "DiscordRPCBridge" */;
+			productName = DiscordRPCBridge;
+		};
 		DC9455272D28B7FC0023E2BB /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DC9455262D28B7FC0023E2BB /* XCRemoteSwiftPackageReference "Sparkle" */;

@@ -8,6 +8,7 @@
 import AppKit
 import Foundation
 import SwiftUI
+import UnixDomainSocket
 
 class WindowDelegate: NSObject, NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {

@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import UnixDomainSocket
 
 struct DiscordWindowContent: View {
     var channelClickWidth: CGFloat

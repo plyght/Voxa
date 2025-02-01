@@ -1,9 +1,9 @@
 import SwiftUI
+import DiscordRPCBridge
 import Foundation
 import UserNotifications
 import OSLog
 @preconcurrency import WebKit
-import Network         // For local IPC bridging (requires macOS 10.14+)
 
 // MARK: - Constants
 
@@ -337,6 +337,7 @@ struct WebView: NSViewRepresentable {
     var channelClickWidth: CGFloat
     var initialURL: URL
     @Binding var webViewReference: WKWebView?
+    private let rpcBridge = DiscordRPCBridge()
 
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: URL) {
@@ -565,9 +566,7 @@ struct WebView: NSViewRepresentable {
             )
         )
 
-        Task {
-            await DiscordRPCBridge.shared.startBridge(for: webView)
-        }
+        rpcBridge.startBridge(for: webView)
 
         loadPluginsAndCSS(webView: webView)
         webView.load(URLRequest(url: initialURL))
