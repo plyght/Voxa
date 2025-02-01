@@ -28,7 +28,7 @@ https://voxa.peril.lol
 - Some items are fully transparent, lacking any translucency or blur effects.
 - Certain items have not been fully integrated with transparent/translucent features.
 - Light mode has a few minor, easily resolvable issues.
-      - To fix this, your macOS settings need to be the same as your Voxa settings. For example, if I want to use light mode on Voxa, my system settings also need to be on light mode.
+  - To fix this, your macOS settings need to be the same as your Voxa settings. For example, if I want to use light mode on Voxa, my system settings also need to be on light mode.
 
 ---
 
