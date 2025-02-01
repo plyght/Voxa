@@ -56,16 +56,14 @@ var suffixedCSSStyles: [String: [String: String]] = [
         "margin-top": "48px"
     ],
     "scroller": [
-        "padding-top": "none"
+        "padding-top": "none",
+        "mask-image": "linear-gradient(to bottom, black calc(100% - 36px), transparent 100%)",
     ],
     "themed_fc4f04": [
         "background-color": "transparent"
     ],
     "themed__9293f": [
         "background-color": "transparent"
-    ],
-    "channelTextArea": [
-        "background-color": "rgba(0, 0, 0, 0.15)"
     ],
     "button_df39bd": [
         "background-color": "rgba(0, 0, 0, 0.15)"
