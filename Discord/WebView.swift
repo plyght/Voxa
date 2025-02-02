@@ -15,7 +15,6 @@ var hexAccentColor: String? {
         let blue = Int(accentColor.blueComponent * 255)
         return String(format: "#%02X%02X%02X", red, green, blue)
     }
-
     return nil
 }
 
@@ -123,7 +122,6 @@ func getPluginContents(name fileName: String) -> String {
             print("Error reading plugin file contents: \(error.localizedDescription)")
         }
     }
-
     return ""
 }
 
@@ -182,9 +180,9 @@ func loadPluginsAndCSS(webView: WKWebView) {
                 )
                 """
             }
-
             return accent
-        }()]
+        }()
+    ]
 
     // Inject default CSS
     webView.configuration.userContentController.addUserScript(
@@ -338,7 +336,12 @@ struct WebView: NSViewRepresentable {
     var initialURL: URL
     @Binding var webViewReference: WKWebView?
     private let rpcBridge = DiscordRPCBridge()
-
+    
+    // ===== PROXY SUPPORT ADDED =====
+    @AppStorage("useDiscordProxy") private var useDiscordProxy: Bool = false
+    @AppStorage("discordProxyAddress") private var discordProxyAddress: String = ""
+    // ================================
+    
     // Initializers
     init(channelClickWidth: CGFloat, initialURL: URL) {
         self.channelClickWidth = channelClickWidth
@@ -388,7 +391,26 @@ struct WebView: NSViewRepresentable {
             "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';",
             forKey: "overrideContentSecurityPolicy"
         )
-
+        
+        // ===== PROXY SUPPORT ADDED =====
+        if useDiscordProxy,
+           let proxyURL = URL(string: discordProxyAddress),
+           let host = proxyURL.host,
+           let port = proxyURL.port {
+            let proxyConfiguration: [AnyHashable: Any] = [
+                kCFNetworkProxiesHTTPEnable as String: true,
+                kCFNetworkProxiesHTTPProxy as String: host,
+                kCFNetworkProxiesHTTPPort as String: port,
+                kCFNetworkProxiesHTTPSEnable as String: true,
+                kCFNetworkProxiesHTTPSProxy as String: host,
+                kCFNetworkProxiesHTTPSPort as String: port
+            ]
+            let schemeHandler = ProxiedSchemeHandler(proxyConfiguration: proxyConfiguration)
+            config.setURLSchemeHandler(schemeHandler, forURLScheme: "proxied-http")
+            config.setURLSchemeHandler(schemeHandler, forURLScheme: "proxied-https")
+        }
+        // ================================
+        
         // MARK: WebView Initialisation
 
         let webView = WKWebView(frame: .zero, configuration: config)
@@ -569,7 +591,23 @@ struct WebView: NSViewRepresentable {
         rpcBridge.startBridge(for: webView)
 
         loadPluginsAndCSS(webView: webView)
-        webView.load(URLRequest(url: initialURL))
+        // ===== PROXY SUPPORT ADDED =====
+        var loadURL = initialURL
+        if useDiscordProxy {
+            var components = URLComponents(url: initialURL, resolvingAgainstBaseURL: false)
+            if let scheme = components?.scheme?.lowercased() {
+                if scheme == "http" {
+                    components?.scheme = "proxied-http"
+                } else if scheme == "https" {
+                    components?.scheme = "proxied-https"
+                }
+            }
+            if let newURL = components?.url {
+                loadURL = newURL
+            }
+        }
+        // ================================
+        webView.load(URLRequest(url: loadURL))
 
         return webView
     }
@@ -773,4 +811,52 @@ func hardReloadWebView(webView: WKWebView) {
     let url = DiscordReleaseChannel(rawValue: releaseChannel)?.url ?? DiscordReleaseChannel.stable.url
 
     webView.load(URLRequest(url: url))
+}
+
+/// ===== PROXY SUPPORT: Custom URL Scheme Handler =====
+class ProxiedSchemeHandler: NSObject, WKURLSchemeHandler {
+    let proxyConfiguration: [AnyHashable: Any]
+    
+    init(proxyConfiguration: [AnyHashable: Any]) {
+        self.proxyConfiguration = proxyConfiguration
+    }
+    
+    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        guard let url = urlSchemeTask.request.url else {
+            urlSchemeTask.didFailWithError(NSError(domain: "InvalidURL", code: -1, userInfo: nil))
+            return
+        }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        if components?.scheme == "proxied-http" {
+            components?.scheme = "http"
+        } else if components?.scheme == "proxied-https" {
+            components?.scheme = "https"
+        }
+        guard let realURL = components?.url else {
+            urlSchemeTask.didFailWithError(NSError(domain: "InvalidConvertedURL", code: -1, userInfo: nil))
+            return
+        }
+        var newRequest = URLRequest(url: realURL)
+        newRequest.allHTTPHeaderFields = urlSchemeTask.request.allHTTPHeaderFields
+        
+        let config = URLSessionConfiguration.default
+        config.connectionProxyDictionary = proxyConfiguration
+        let session = URLSession(configuration: config)
+        let task = session.dataTask(with: newRequest) { data, response, error in
+            if let error = error {
+                urlSchemeTask.didFailWithError(error)
+                return
+            }
+            if let response = response, let data = data {
+                urlSchemeTask.didReceive(response)
+                urlSchemeTask.didReceive(data)
+                urlSchemeTask.didFinish()
+            }
+        }
+        task.resume()
+    }
+    
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+        // Handle cancellation if needed.
+    }
 }

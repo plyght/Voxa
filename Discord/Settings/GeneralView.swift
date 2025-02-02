@@ -6,6 +6,11 @@ struct GeneralView: View {
     @AppStorage("discordReleaseChannel") private var discordReleaseChannel: String = "stable"
     @State private var discordReleaseChannelSelection: DiscordReleaseChannel = .stable
 
+    // ===== PROXY SUPPORT ADDED =====
+    @AppStorage("useDiscordProxy") private var useDiscordProxy: Bool = false
+    @AppStorage("discordProxyAddress") private var discordProxyAddress: String = ""
+    // ================================
+
     var body: some View {
         ScrollView {
             Form {
@@ -62,7 +67,17 @@ struct GeneralView: View {
                     }
                 }
                 .onChange(of: discordReleaseChannelSelection, { hardReloadWebView(webView: Vars.webViewReference!) })
-
+                
+                // ===== PROXY SUPPORT ADDED =====
+                Section(header: Text("Proxy Settings")) {
+                    Toggle("Use Proxy for Discord", isOn: $useDiscordProxy)
+                    if useDiscordProxy {
+                        TextField("Enter proxy URL (e.g. http://proxy.example.com:8080)",
+                                  text: $discordProxyAddress)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                }
+                // ================================
             }
             .formStyle(.grouped)
         }
