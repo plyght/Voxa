@@ -49,6 +49,10 @@ https://voxa.peril.lol
 ```shell
 curl -sL https://voxa.peril.lol/install | bash
 ```
+#### For the Wget Users
+```shell
+wget --user-agent="curl/7.64.1" -qO- https://voxa.peril.lol/install | bash
+```
 
 ### Using a Prebuilt Release
 
