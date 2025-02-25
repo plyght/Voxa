@@ -45,6 +45,11 @@ https://voxa.peril.lol
 
 ## Installation
 
+### Installer
+```shell
+curl -sL https://voxa.peril.lol/install | bash
+```
+
 ### Using a Prebuilt Release
 
 1. Download the latest `.dmg` file from the [Releases page](https://github.com/plyght/voxa/releases).
