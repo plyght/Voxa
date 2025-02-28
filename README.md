@@ -40,7 +40,7 @@ https://voxa.peril.lol
 
 - [Installation](#installation)
 - [Upcoming Features](#upcoming-features)
-- [Disclaimer](#disclaimer!)
+- [Disclaimer](#disclaimer)
 
 ---
 
