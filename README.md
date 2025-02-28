@@ -69,11 +69,11 @@ curl -sL https://voxa.peril.lol/install | bash
 
 ## Star History
 
-<a href="https://star-history.com/#plyght/voxa&Date">
+<a href="https://star-history.com/#voxa-org/voxa&Timeline">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=plyght/voxa&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=plyght/voxa&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=plyght/voxa&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=voxa-org/voxa&type=Timeline&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=voxa-org/voxa&type=Timeline" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=voxa-org/voxa&type=Timeline" />
  </picture>
 </a>
 
