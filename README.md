@@ -18,7 +18,7 @@ https://discord.gg/Dps8HnDBpw
 
 ### Matrix Room
 
-https://matrix.org/#/#voxa:matrix.org
+https://matrix.to/#/#voxa:matrix.org
 
 ### Website (in development)<sup><a href="#1source-code-repository---this-contains-the-source-code-and-related-documentation-for-the-project">1</a></sup>.
 
